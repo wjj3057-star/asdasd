@@ -192,19 +192,33 @@ async function processPurchase(interaction, productId, qty) {
   }
 
   const contents = [];
+  let firstPurchaseId = null;
   for (const item of items) {
-    Purchases.create({
+    const pid = Purchases.create({
       discord_id: interaction.user.id,
       product_id: product.id,
       product_name: product.name,
       stock_id: item.id,
       price: product.price,
-      content: item.content,
+      content: product.delivery_type === 'roblox_trade' ? (product.roblox_item || product.name) : item.content,
     });
+    if (firstPurchaseId === null) firstPurchaseId = pid;
     contents.push(item.content);
   }
 
   const newBalance = Users.get(interaction.user.id).balance;
+
+  // 로블록스 트레이드 배송 상품이면 별도 배송 플로우로 분기
+  if (product.delivery_type === 'roblox_trade') {
+    const roblox = require('./roblox');
+    return roblox.handleRobloxPurchase(interaction, {
+      product,
+      qty: realQty,
+      total: realTotal,
+      newBalance,
+      purchaseId: firstPurchaseId,
+    });
+  }
 
   // 상품 내용은 DM으로 발송
   const dmEmbed = new EmbedBuilder()
@@ -268,4 +282,5 @@ module.exports = {
   onProductSelected,
   openQtyModal,
   processPurchase,
+  safeReply,
 };

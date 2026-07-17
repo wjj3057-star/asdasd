@@ -21,4 +21,8 @@ module.exports = {
   DEPOSIT_NAME_MODAL: 'vm:deposit:modal', // vm:deposit:modal:<amount>
 
   INFO_HISTORY: 'vm:info:history',
+
+  // 로블록스 트레이드 배송
+  ROBLOX_SET_USERNAME: 'vm:rbx:setname', // vm:rbx:setname:<deliveryId>
+  ROBLOX_USERNAME_MODAL: 'vm:rbx:namemodal', // vm:rbx:namemodal:<deliveryId>
 };

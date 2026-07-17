@@ -3,6 +3,7 @@
 const config = require('./config');
 const web = require('./web/server');
 const chargeService = require('./payments/chargeService');
+const deliveryService = require('./roblox/deliveryService');
 const coinPoller = require('./payments/coinPoller');
 const { Charges } = require('./database/models');
 
@@ -16,7 +17,10 @@ async function main() {
     const bot = require('./bot/client');
     botClient = await bot.login();
     refreshPanel = bot.refreshPanel;
-    if (botClient) chargeService.setBotClient(botClient);
+    if (botClient) {
+      chargeService.setBotClient(botClient);
+      deliveryService.setBotClient(botClient);
+    }
   } catch (e) {
     console.error('봇 시작 실패(웹 대시보드만 실행):', e.message);
   }

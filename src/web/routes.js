@@ -12,10 +12,14 @@ const {
   Purchases,
   BankNotifications,
   Coins,
+  VipServers,
+  Deliveries,
   stats,
   dashboard,
 } = require('../database/models');
 const { approveCharge, rejectCharge } = require('../payments/chargeService');
+const deliveryService = require('../roblox/deliveryService');
+const roblox = require('../roblox');
 const { won } = require('../util');
 const { requireAdmin } = require('./auth');
 
@@ -179,6 +183,9 @@ router.post('/products', (req, res) => {
     price: parseInt(req.body.price || '0', 10),
     position: parseInt(req.body.position || '0', 10),
     is_active: req.body.is_active ? 1 : 0,
+    delivery_type: req.body.delivery_type || 'stock',
+    roblox_item: req.body.roblox_item || '',
+    roblox_game: req.body.roblox_game || 'Grow a Garden 2',
   });
   res.redirect('/products');
 });
@@ -191,6 +198,9 @@ router.post('/products/:id/update', (req, res) => {
     price: parseInt(req.body.price || '0', 10),
     position: parseInt(req.body.position || '0', 10),
     is_active: req.body.is_active ? 1 : 0,
+    delivery_type: req.body.delivery_type || 'stock',
+    roblox_item: req.body.roblox_item || '',
+    roblox_game: req.body.roblox_game || 'Grow a Garden 2',
   });
   res.redirect('/products');
 });
@@ -295,6 +305,87 @@ router.post('/users/:id/adjust', (req, res) => {
     /* 잔액부족 무시 */
   }
   res.redirect('/users');
+});
+
+/* ---------------- 로블록스 배송 관리 ---------------- */
+router.get('/roblox', (req, res) => {
+  const servers = VipServers.all();
+  const serverMap = {};
+  for (const s of servers) serverMap[s.id] = s;
+  const deliveries = Deliveries.all(200).map((d) => ({
+    ...d,
+    userObj: Users.get(d.discord_id),
+    server: d.vip_server_id ? serverMap[d.vip_server_id] : null,
+    avatar: d.roblox_userid ? roblox.avatarUrl(d.roblox_userid) : '',
+    profile: d.roblox_userid ? roblox.profileUrl(d.roblox_userid) : '',
+  }));
+  render(res, 'roblox', {
+    active: 'roblox',
+    title: '로블록스 배송',
+    user: req.session.user,
+    deliveries,
+    servers,
+    pending: Deliveries.pendingCount(),
+  });
+});
+
+router.post('/roblox/:id/complete', async (req, res) => {
+  await deliveryService.completeDelivery(parseInt(req.params.id, 10), req.session.user.username);
+  res.redirect('/roblox');
+});
+router.post('/roblox/:id/fail', async (req, res) => {
+  const refund = req.body.refund ? true : false;
+  await deliveryService.failDelivery(parseInt(req.params.id, 10), req.body.reason || '관리자 실패 처리', refund);
+  res.redirect('/roblox');
+});
+router.post('/roblox/:id/resend', async (req, res) => {
+  await deliveryService.resendLink(parseInt(req.params.id, 10));
+  res.redirect('/roblox');
+});
+router.post('/roblox/:id/assign', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const serverId = parseInt(req.body.server_id, 10);
+  if (serverId) {
+    Deliveries.assignServer(id, serverId);
+    const d = Deliveries.get(id);
+    if (d && d.status === 'awaiting_username') {
+      // 닉네임 있으면 대기열로, 없으면 그대로 둠
+    } else {
+      Deliveries.setStatus(id, 'queued');
+    }
+    await deliveryService.resendLink(id);
+  }
+  res.redirect('/roblox');
+});
+
+/* ---------------- VIP 서버 / 꼭두각시 관리 ---------------- */
+router.post('/vip-servers', (req, res) => {
+  VipServers.create({
+    name: req.body.name,
+    game: req.body.game,
+    vip_link: req.body.vip_link,
+    puppet_name: req.body.puppet_name,
+    capacity: req.body.capacity,
+    status: req.body.status || 'active',
+    notes: req.body.notes,
+  });
+  res.redirect('/roblox');
+});
+router.post('/vip-servers/:id/update', (req, res) => {
+  VipServers.update(parseInt(req.params.id, 10), {
+    name: req.body.name,
+    game: req.body.game,
+    vip_link: req.body.vip_link,
+    puppet_name: req.body.puppet_name,
+    capacity: req.body.capacity,
+    status: req.body.status || 'active',
+    notes: req.body.notes,
+  });
+  res.redirect('/roblox');
+});
+router.post('/vip-servers/:id/delete', (req, res) => {
+  VipServers.remove(parseInt(req.params.id, 10));
+  res.redirect('/roblox');
 });
 
 /* ---------------- 패널 설치/갱신 (상점 메시지 동기화) ---------------- */

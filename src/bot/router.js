@@ -5,6 +5,7 @@ const buy = require('./flows/buy');
 const charge = require('./flows/charge');
 const info = require('./flows/info');
 const products = require('./flows/products');
+const roblox = require('./flows/roblox');
 
 // 모든 상호작용을 라우팅
 async function handleInteraction(interaction) {
@@ -41,6 +42,12 @@ async function handleButton(interaction) {
     const qty = parseInt(parts[4], 10) || 1;
     return buy.processPurchase(interaction, productId, qty);
   }
+
+  // vm:rbx:setname:<deliveryId>
+  if (id.startsWith(IDS.ROBLOX_SET_USERNAME + ':')) {
+    const deliveryId = parseInt(id.split(':').pop(), 10);
+    return roblox.openUsernameModal(interaction, deliveryId);
+  }
 }
 
 async function handleSelect(interaction) {
@@ -63,6 +70,11 @@ async function handleModal(interaction) {
     const productId = parseInt(id.split(':').pop(), 10);
     const qty = interaction.fields.getTextInputValue('qty');
     return buy.processPurchase(interaction, productId, qty);
+  }
+  // vm:rbx:namemodal:<deliveryId>
+  if (id.startsWith(IDS.ROBLOX_USERNAME_MODAL + ':')) {
+    const deliveryId = parseInt(id.split(':').pop(), 10);
+    return roblox.submitUsername(interaction, deliveryId);
   }
 }
 

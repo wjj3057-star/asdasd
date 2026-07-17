@@ -30,6 +30,16 @@
         <div><label>정렬</label><input type="number" name="position" value="0" /></div>
       </div>
       <label>설명 (예: 즉시 지급, 5% 할인 적용)</label><input type="text" name="description" />
+      <div class="form-row">
+        <div><label>배송 방식</label>
+          <select name="delivery_type" class="dtype-select" onchange="toggleRbx(this)">
+            <option value="stock">재고 코드 지급 (기본)</option>
+            <option value="roblox_trade">로블록스 게임 트레이드</option>
+          </select>
+        </div>
+        <div class="rbx-field" style="display:none"><label>게임</label><input type="text" name="roblox_game" value="Grow a Garden 2" /></div>
+        <div class="rbx-field" style="display:none"><label>게임 내 아이템명</label><input type="text" name="roblox_item" placeholder="예: 무지개 씨앗" /></div>
+      </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="is_active" checked style="width:auto" /> 판매 활성화</label>
       <div style="margin-top:16px"><button class="btn green">상품 추가</button></div>
     </form>
@@ -62,7 +72,10 @@
       <div class="stock-txt <%= p.stock <= 5 ? 'low' : '' %>">재고 <%= p.stock %>개</div>
     </div>
     <div class="foot-row">
-      <span class="give">자동 지급</span>
+      <span class="give">
+        <% if (p.delivery_type === 'roblox_trade') { %><span class="tag blue">🎮 로블록스 트레이드</span> <%= p.roblox_item ? '· ' + p.roblox_item : '' %>
+        <% } else { %>자동 코드 지급<% } %>
+      </span>
       <% if (p.is_active) { %><span class="pill on"><span class="dot"></span> 판매 중</span>
       <% } else { %><span class="pill off"><span class="dot"></span> 판매 중지</span><% } %>
     </div>
@@ -83,6 +96,14 @@
             <select name="is_active"><option value="1" <%= p.is_active?'selected':'' %>>판매 중</option><option value="" <%= !p.is_active?'selected':'' %>>중지</option></select>
           </div>
           <input type="text" name="description" value="<%= p.description %>" style="margin-top:10px" />
+          <div class="form-row" style="margin-top:10px">
+            <select name="delivery_type" onchange="toggleRbx(this)">
+              <option value="stock" <%= p.delivery_type!=='roblox_trade'?'selected':'' %>>재고 코드 지급</option>
+              <option value="roblox_trade" <%= p.delivery_type==='roblox_trade'?'selected':'' %>>로블록스 트레이드</option>
+            </select>
+            <input type="text" name="roblox_game" value="<%= p.roblox_game || 'Grow a Garden 2' %>" placeholder="게임" class="rbx-field" style="<%= p.delivery_type==='roblox_trade'?'':'display:none' %>" />
+            <input type="text" name="roblox_item" value="<%= p.roblox_item %>" placeholder="게임 내 아이템명" class="rbx-field" style="<%= p.delivery_type==='roblox_trade'?'':'display:none' %>" />
+          </div>
           <div class="btn-row" style="margin-top:12px"><button class="btn green sm">저장</button></div>
         </form>
         <form method="post" action="/products/<%= p.id %>/delete" onsubmit="return confirm('상품과 모든 재고가 삭제됩니다. 계속할까요?')" style="margin-top:8px">
@@ -103,6 +124,14 @@
       el.style.display = el.dataset.name.indexOf(q) > -1 ? '' : 'none';
     });
   });
+  // 배송 방식이 로블록스일 때만 게임/아이템 입력 표시
+  function toggleRbx(sel){
+    var show = sel.value === 'roblox_trade';
+    var scope = sel.closest('form');
+    scope.querySelectorAll('.rbx-field').forEach(function(el){ el.style.display = show ? '' : 'none'; });
+  }
+  // 초기 상태 반영 (추가 폼)
+  document.querySelectorAll('select[name="delivery_type"]').forEach(function(sel){ toggleRbx(sel); });
 </script>
 
 <%- include('partials/footer') %>

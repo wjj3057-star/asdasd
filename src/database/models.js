@@ -108,8 +108,8 @@ const Products = {
   create(p) {
     const info = db
       .prepare(
-        `INSERT INTO products (category_id, name, description, emoji, price, min_role_id, position, is_active, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?)`
+        `INSERT INTO products (category_id, name, description, emoji, price, min_role_id, position, is_active, delivery_type, roblox_item, roblox_game, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         p.category_id,
@@ -120,13 +120,16 @@ const Products = {
         p.min_role_id || '',
         p.position || 0,
         p.is_active === undefined ? 1 : p.is_active,
+        p.delivery_type || 'stock',
+        p.roblox_item || '',
+        p.roblox_game || 'Grow a Garden 2',
         now()
       );
     return info.lastInsertRowid;
   },
   update(id, p) {
     db.prepare(
-      `UPDATE products SET category_id=?, name=?, description=?, emoji=?, price=?, min_role_id=?, position=?, is_active=? WHERE id=?`
+      `UPDATE products SET category_id=?, name=?, description=?, emoji=?, price=?, min_role_id=?, position=?, is_active=?, delivery_type=?, roblox_item=?, roblox_game=? WHERE id=?`
     ).run(
       p.category_id,
       p.name,
@@ -136,6 +139,9 @@ const Products = {
       p.min_role_id || '',
       p.position || 0,
       p.is_active === undefined ? 1 : p.is_active,
+      p.delivery_type || 'stock',
+      p.roblox_item || '',
+      p.roblox_game || 'Grow a Garden 2',
       id
     );
   },
@@ -227,6 +233,12 @@ const Users = {
       discordId
     );
   },
+  setRoblox(discordId, username, userId) {
+    Users.ensure(discordId);
+    db.prepare(
+      'UPDATE users SET roblox_username=?, roblox_userid=? WHERE discord_id=?'
+    ).run(username || '', userId || '', discordId);
+  },
   // 잔액 증감 + 원장 기록 (원자적)
   adjustBalance(discordId, delta, type, memo = '') {
     const tx = db.transaction(() => {
@@ -269,7 +281,7 @@ const Users = {
  * =======================================================*/
 const Purchases = {
   create(rec) {
-    db.prepare(
+    const info = db.prepare(
       `INSERT INTO purchases (discord_id, product_id, product_name, stock_id, price, content, created_at)
        VALUES (?,?,?,?,?,?,?)`
     ).run(
@@ -281,6 +293,7 @@ const Purchases = {
       rec.content,
       now()
     );
+    return info.lastInsertRowid;
   },
   byUser(discordId, limit = 20) {
     return db
@@ -415,6 +428,169 @@ const BankNotifications = {
     return db
       .prepare('SELECT * FROM bank_notifications ORDER BY id DESC LIMIT ?')
       .all(limit);
+  },
+};
+
+/* =========================================================
+ * VIP Servers (로블록스 꼭두각시 서버 풀)
+ * =======================================================*/
+const VipServers = {
+  all() {
+    return db.prepare('SELECT * FROM vip_servers ORDER BY id ASC').all();
+  },
+  get(id) {
+    return db.prepare('SELECT * FROM vip_servers WHERE id=?').get(id);
+  },
+  create(v) {
+    const info = db
+      .prepare(
+        `INSERT INTO vip_servers (name, game, vip_link, puppet_name, capacity, status, notes, created_at)
+         VALUES (?,?,?,?,?,?,?,?)`
+      )
+      .run(
+        v.name,
+        v.game || 'Grow a Garden 2',
+        v.vip_link,
+        v.puppet_name || '',
+        parseInt(v.capacity || '0', 10),
+        v.status || 'active',
+        v.notes || '',
+        now()
+      );
+    return info.lastInsertRowid;
+  },
+  update(id, v) {
+    db.prepare(
+      `UPDATE vip_servers SET name=?, game=?, vip_link=?, puppet_name=?, capacity=?, status=?, notes=? WHERE id=?`
+    ).run(
+      v.name,
+      v.game || 'Grow a Garden 2',
+      v.vip_link,
+      v.puppet_name || '',
+      parseInt(v.capacity || '0', 10),
+      v.status || 'active',
+      v.notes || '',
+      id
+    );
+  },
+  remove(id) {
+    db.prepare('DELETE FROM vip_servers WHERE id=?').run(id);
+  },
+  // 해당 게임의 활성 서버 중 현재 진행중 배송이 가장 적은 서버를 배정 (부하 분산)
+  pickForGame(game) {
+    const servers = db
+      .prepare("SELECT * FROM vip_servers WHERE status='active'")
+      .all()
+      .filter((s) => !game || !s.game || s.game === game);
+    if (!servers.length) return null;
+    const load = (sid) =>
+      db
+        .prepare(
+          "SELECT COUNT(*) c FROM roblox_deliveries WHERE vip_server_id=? AND status IN ('queued','joined')"
+        )
+        .get(sid).c;
+    servers.sort((a, b) => {
+      // capacity 초과 서버는 뒤로
+      const la = load(a.id);
+      const lb = load(b.id);
+      const overA = a.capacity > 0 && la >= a.capacity ? 1 : 0;
+      const overB = b.capacity > 0 && lb >= b.capacity ? 1 : 0;
+      if (overA !== overB) return overA - overB;
+      return la - lb;
+    });
+    return servers[0];
+  },
+};
+
+/* =========================================================
+ * Roblox Deliveries (게임 아이템 트레이드 배송 세션)
+ * =======================================================*/
+const DELIVERY_ACTIVE = ['awaiting_username', 'queued', 'joined'];
+const Deliveries = {
+  create(d) {
+    const info = db
+      .prepare(
+        `INSERT INTO roblox_deliveries
+         (purchase_id, discord_id, product_id, product_name, roblox_item, quantity, price,
+          roblox_username, roblox_userid, vip_server_id, status, note, created_at, queued_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      )
+      .run(
+        d.purchase_id || null,
+        d.discord_id,
+        d.product_id || null,
+        d.product_name || '',
+        d.roblox_item || '',
+        d.quantity || 1,
+        d.price || 0,
+        d.roblox_username || '',
+        d.roblox_userid || '',
+        d.vip_server_id || null,
+        d.status || 'awaiting_username',
+        d.note || '',
+        now(),
+        d.status === 'queued' ? now() : null
+      );
+    return Deliveries.get(info.lastInsertRowid);
+  },
+  get(id) {
+    return db.prepare('SELECT * FROM roblox_deliveries WHERE id=?').get(id);
+  },
+  all(limit = 200) {
+    return db
+      .prepare('SELECT * FROM roblox_deliveries ORDER BY id DESC LIMIT ?')
+      .all(limit);
+  },
+  active() {
+    return db
+      .prepare(
+        "SELECT * FROM roblox_deliveries WHERE status IN ('awaiting_username','queued','joined') ORDER BY id ASC"
+      )
+      .all();
+  },
+  queue() {
+    // 처리 대기(닉네임 확보 후 대기열/접속) — 오퍼레이터/외부 워커가 가져가는 목록
+    return db
+      .prepare(
+        "SELECT * FROM roblox_deliveries WHERE status IN ('queued','joined') ORDER BY id ASC"
+      )
+      .all();
+  },
+  pendingCount() {
+    return db
+      .prepare(
+        "SELECT COUNT(*) c FROM roblox_deliveries WHERE status IN ('awaiting_username','queued','joined')"
+      )
+      .get().c;
+  },
+  byUser(discordId, limit = 20) {
+    return db
+      .prepare('SELECT * FROM roblox_deliveries WHERE discord_id=? ORDER BY id DESC LIMIT ?')
+      .all(discordId, limit);
+  },
+  setUsername(id, username, userId) {
+    db.prepare(
+      'UPDATE roblox_deliveries SET roblox_username=?, roblox_userid=? WHERE id=?'
+    ).run(username, userId || '', id);
+  },
+  assignServer(id, serverId) {
+    db.prepare('UPDATE roblox_deliveries SET vip_server_id=? WHERE id=?').run(serverId, id);
+  },
+  setStatus(id, status, extra = {}) {
+    const stamps = {
+      queued: 'queued_at',
+      joined: 'joined_at',
+      completed: 'completed_at',
+    };
+    db.prepare('UPDATE roblox_deliveries SET status=? WHERE id=?').run(status, id);
+    if (stamps[status]) {
+      db.prepare(`UPDATE roblox_deliveries SET ${stamps[status]}=? WHERE id=?`).run(now(), id);
+    }
+    if (extra.operator !== undefined)
+      db.prepare('UPDATE roblox_deliveries SET operator=? WHERE id=?').run(extra.operator, id);
+    if (extra.note !== undefined)
+      db.prepare('UPDATE roblox_deliveries SET note=? WHERE id=?').run(extra.note, id);
+    return Deliveries.get(id);
   },
 };
 
@@ -593,6 +769,7 @@ function dashboard() {
     pendingCharges: db
       .prepare("SELECT COUNT(*) c FROM charge_requests WHERE status='pending'")
       .get().c,
+    pendingDeliveries: Deliveries.pendingCount(),
     successRate: chargeSuccessRate(),
     daily7: dailyRevenue(7),
     daily30: dailyRevenue(30),
@@ -615,6 +792,8 @@ module.exports = {
   Charges,
   BankNotifications,
   Coins,
+  VipServers,
+  Deliveries,
   stats,
   dashboard,
   dailyRevenue,

@@ -128,6 +128,44 @@ CREATE TABLE IF NOT EXISTS coins (
 );
 `);
 
+db.exec(`
+-- 로블록스 VIP 서버 / 꼭두각시(전달용) 계정 풀
+CREATE TABLE IF NOT EXISTS vip_servers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  game          TEXT DEFAULT 'Grow a Garden 2',
+  vip_link      TEXT NOT NULL,
+  puppet_name   TEXT DEFAULT '',        -- 서버에 상주하는 꼭두각시 로블록스 닉네임
+  capacity      INTEGER DEFAULT 0,      -- 동시 처리 가능 수(0=무제한)
+  status        TEXT DEFAULT 'active',  -- active | paused
+  notes         TEXT DEFAULT '',
+  created_at    INTEGER NOT NULL
+);
+
+-- 로블록스 아이템 배송(트레이드) 세션
+CREATE TABLE IF NOT EXISTS roblox_deliveries (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id      INTEGER,
+  discord_id       TEXT NOT NULL,
+  product_id       INTEGER,
+  product_name     TEXT DEFAULT '',
+  roblox_item      TEXT DEFAULT '',
+  quantity         INTEGER DEFAULT 1,
+  price            INTEGER DEFAULT 0,
+  roblox_username  TEXT DEFAULT '',
+  roblox_userid    TEXT DEFAULT '',
+  vip_server_id    INTEGER,
+  status           TEXT NOT NULL DEFAULT 'awaiting_username',
+  -- awaiting_username | queued | joined | completed | failed | cancelled
+  operator         TEXT DEFAULT '',
+  note             TEXT DEFAULT '',
+  created_at       INTEGER NOT NULL,
+  queued_at        INTEGER,
+  joined_at        INTEGER,
+  completed_at     INTEGER
+);
+`);
+
 // ---- 간단 마이그레이션: 누락 컬럼 추가 ----
 function ensureColumn(table, column, ddl) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -136,5 +174,12 @@ function ensureColumn(table, column, ddl) {
   }
 }
 ensureColumn('charge_requests', 'coin_network', "coin_network TEXT DEFAULT ''");
+// 상품 배송 타입: stock(코드지급) | roblox_trade(게임 내 트레이드)
+ensureColumn('products', 'delivery_type', "delivery_type TEXT DEFAULT 'stock'");
+ensureColumn('products', 'roblox_item', "roblox_item TEXT DEFAULT ''");
+ensureColumn('products', 'roblox_game', "roblox_game TEXT DEFAULT 'Grow a Garden 2'");
+// 유저의 로블록스 계정 (재구매 시 재사용)
+ensureColumn('users', 'roblox_username', "roblox_username TEXT DEFAULT ''");
+ensureColumn('users', 'roblox_userid', "roblox_userid TEXT DEFAULT ''");
 
 module.exports = db;

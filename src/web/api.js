@@ -59,6 +59,66 @@ router.post('/webhook/coin', checkSecret, (req, res) => {
   return res.json(result);
 });
 
+/* =========================================================
+ * 로블록스 배송 처리 API (꼭두각시 운영 워커/오퍼레이터용)
+ * ※ 게임 클라이언트 자동제어(트레이드 봇)는 로블록스 ToS 위반이라 포함하지 않습니다.
+ *   이 API는 사람이 운영하거나, 본인이 책임지는 외부 도구가 배송 큐를 받아
+ *   완료/실패를 보고하도록 하는 오케스트레이션 인터페이스입니다.
+ * =======================================================*/
+const { Deliveries, VipServers } = require('../database/models');
+const deliveryService = require('../roblox/deliveryService');
+
+// 처리 대기열 조회
+router.get('/roblox/queue', checkSecret, (_req, res) => {
+  const items = Deliveries.queue().map((d) => {
+    const s = d.vip_server_id ? VipServers.get(d.vip_server_id) : null;
+    return {
+      id: d.id,
+      discord_id: d.discord_id,
+      product: d.product_name,
+      item: d.roblox_item,
+      quantity: d.quantity,
+      roblox_username: d.roblox_username,
+      roblox_userid: d.roblox_userid,
+      status: d.status,
+      vip_server: s ? { id: s.id, name: s.name, vip_link: s.vip_link, puppet_name: s.puppet_name } : null,
+      created_at: d.created_at,
+    };
+  });
+  res.json({ ok: true, count: items.length, items });
+});
+
+// 오퍼레이터가 클레임 (담당자 표기)
+router.post('/roblox/deliveries/:id/claim', checkSecret, (req, res) => {
+  const d = Deliveries.get(parseInt(req.params.id, 10));
+  if (!d) return res.status(404).json({ ok: false, error: 'not_found' });
+  Deliveries.setStatus(d.id, d.status === 'queued' ? 'joined' : d.status, {
+    operator: req.body.operator || 'worker',
+  });
+  res.json({ ok: true });
+});
+
+// 유저 접속 확인(선택)
+router.post('/roblox/deliveries/:id/joined', checkSecret, (req, res) => {
+  const d = Deliveries.get(parseInt(req.params.id, 10));
+  if (!d) return res.status(404).json({ ok: false, error: 'not_found' });
+  Deliveries.setStatus(d.id, 'joined', { operator: req.body.operator });
+  res.json({ ok: true });
+});
+
+// 배송 완료 → 유저 DM
+router.post('/roblox/deliveries/:id/complete', checkSecret, async (req, res) => {
+  const r = await deliveryService.completeDelivery(parseInt(req.params.id, 10), req.body.operator || 'worker');
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+// 배송 실패 → (옵션)환불 + 유저 DM
+router.post('/roblox/deliveries/:id/fail', checkSecret, async (req, res) => {
+  const refund = req.body.refund === undefined ? true : !!req.body.refund;
+  const r = await deliveryService.failDelivery(parseInt(req.params.id, 10), req.body.reason || '', refund);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
 router.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // 한국 은행 입금 문자 간이 파서
