@@ -1,0 +1,68 @@
+<%- include('partials/header') %>
+<h1>🏪 상점 / 임베드 설정</h1>
+<p class="sub">디스코드 자판기 패널에 표시되는 상점명·설명과 결제 정보를 설정합니다.</p>
+
+<% if (saved) { %>
+  <div class="alert ok">
+    <% if (saved==='panel') { %>✅ 패널을 갱신했습니다.
+    <% } else if (saved==='panelfail') { %>⚠️ 패널을 찾을 수 없습니다. 디스코드에서 <b>/패널</b> 명령으로 먼저 설치하세요.
+    <% } else { %>✅ 설정이 저장되었고 패널에 즉시 반영되었습니다.<% } %>
+  </div>
+<% } %>
+
+<form method="post" action="/settings">
+  <div class="grid cols-2">
+    <div class="card">
+      <h2 style="margin-top:0">기본 정보</h2>
+      <label>상점 이름 (임베드 제목)</label>
+      <input type="text" name="shop_name" value="<%= settings.shop_name %>" />
+      <label>상점 설명 (임베드 본문 · 마크다운 가능)</label>
+      <textarea name="shop_description"><%= settings.shop_description %></textarea>
+      <div class="row">
+        <div><label>임베드 색상</label><input type="color" name="embed_color" value="<%= settings.embed_color %>" /></div>
+        <div><label>푸터 문구</label><input type="text" name="embed_footer" value="<%= settings.embed_footer %>" /></div>
+      </div>
+      <label>썸네일 이미지 URL (선택)</label>
+      <input type="text" name="embed_thumbnail" value="<%= settings.embed_thumbnail %>" placeholder="https://..." />
+      <label>큰 이미지 URL (선택)</label>
+      <input type="text" name="embed_image" value="<%= settings.embed_image %>" placeholder="https://..." />
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">🏦 계좌충전 (PG 미사용)</h2>
+      <p class="muted" style="font-size:12px">입금 알림 포워딩으로 자동 충전됩니다. (설정 방법은 README 참고)</p>
+      <label>은행명</label>
+      <input type="text" name="bank_name" value="<%= settings.bank_name %>" placeholder="예: KB국민은행" />
+      <div class="row">
+        <div><label>예금주</label><input type="text" name="bank_holder" value="<%= settings.bank_holder %>" /></div>
+        <div><label>계좌번호</label><input type="text" name="bank_account" value="<%= settings.bank_account %>" /></div>
+      </div>
+
+      <h2>🪙 코인충전</h2>
+      <div class="row">
+        <div><label>코인 심볼</label><input type="text" name="coin_symbol" value="<%= settings.coin_symbol %>" /></div>
+        <div><label>네트워크</label><input type="text" name="coin_network" value="<%= settings.coin_network %>" /></div>
+      </div>
+      <label>지갑 주소</label>
+      <input type="text" name="coin_wallet" value="<%= settings.coin_wallet %>" />
+      <label>적용 환율 (1코인 = ?원)</label>
+      <input type="number" name="coin_krw_rate" value="<%= settings.coin_krw_rate %>" />
+
+      <h2>공통</h2>
+      <div class="row">
+        <div><label>최소 충전액(원)</label><input type="number" name="charge_min" value="<%= settings.charge_min %>" /></div>
+        <div><label>충전 만료(분)</label><input type="number" name="charge_expire_minutes" value="<%= settings.charge_expire_minutes %>" /></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px" class="pill-row">
+    <button class="btn green" type="submit">💾 저장 &amp; 패널 반영</button>
+  </div>
+</form>
+
+<form method="post" action="/panel/refresh" style="margin-top:12px">
+  <button class="btn gray" type="submit">🔄 패널만 다시 갱신</button>
+  <span class="muted" style="margin-left:10px">디스코드에서 <b>/패널</b> 로 설치 후 사용하세요.</span>
+</form>
+<%- include('partials/footer') %>

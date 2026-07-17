@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= settings.shop_name %> · 관리자</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">🏪 <span><%= settings.shop_name %></span></div>
+    <nav class="nav">
+      <a href="/" class="<%= active==='dashboard'?'active':'' %>">📊 대시보드</a>
+      <a href="/settings" class="<%= active==='settings'?'active':'' %>">🏪 상점/임베드 설정</a>
+      <a href="/categories" class="<%= active==='categories'?'active':'' %>">🗂️ 카테고리</a>
+      <a href="/products" class="<%= active==='products'?'active':'' %>">📦 제품/재고</a>
+      <a href="/charges" class="<%= active==='charges'?'active':'' %>">💳 충전 요청</a>
+      <a href="/users" class="<%= active==='users'?'active':'' %>">👥 유저</a>
+    </nav>
+    <% if (typeof user !== 'undefined' && user) { %>
+    <div class="me">
+      <% if (user.avatar) { %><img src="<%= user.avatar %>" alt="" /><% } %>
+      <%= user.username %><br />
+      <a href="/logout">로그아웃</a>
+    </div>
+    <% } %>
+  </aside>
+  <main class="main">

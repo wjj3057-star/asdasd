@@ -1,0 +1,28 @@
+<%- include('partials/header') %>
+<h1>👥 유저</h1>
+<p class="sub">유저 잔액을 확인하고 수동으로 지급/차감합니다.</p>
+
+<div class="card">
+  <% if (!users.length) { %><p class="muted">유저가 없습니다.</p><% } else { %>
+  <table>
+    <tr><th>유저</th><th>잔액</th><th>입금자명</th><th>누적충전</th><th>누적사용</th><th>잔액조정</th></tr>
+    <% users.forEach(u => { %>
+    <tr>
+      <td class="mono"><%= u.username %><br/><span class="muted"><%= u.discord_id %></span></td>
+      <td><b><%= won(u.balance) %></b></td>
+      <td><%= u.deposit_name || '-' %></td>
+      <td class="muted"><%= won(u.total_charged) %></td>
+      <td class="muted"><%= won(u.total_spent) %></td>
+      <td>
+        <form method="post" action="/users/<%= u.discord_id %>/adjust" class="row" style="gap:6px">
+          <input type="number" name="amount" placeholder="+/- 금액" style="min-width:100px" required />
+          <input type="text" name="memo" placeholder="메모" style="min-width:100px" />
+          <button class="btn sm">적용</button>
+        </form>
+      </td>
+    </tr>
+    <% }) %>
+  </table>
+  <% } %>
+</div>
+<%- include('partials/footer') %>

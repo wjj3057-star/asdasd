@@ -1,0 +1,54 @@
+<%- include('partials/header') %>
+<h1>💳 충전 요청</h1>
+<p class="sub">계좌/코인 충전 요청을 확인하고 자동매칭 실패 시 수동으로 승인/반려합니다.</p>
+
+<div class="card">
+  <table>
+    <tr><th>#</th><th>유저</th><th>방식</th><th>입금정보</th><th>충전액</th><th>상태</th><th>시각</th><th>관리</th></tr>
+    <% charges.forEach(c => { %>
+    <tr>
+      <td>#<%= c.id %></td>
+      <td class="mono"><%= c.userObj ? c.userObj.username : '' %><br/><span class="muted"><%= c.discord_id %></span></td>
+      <td><%= c.method==='coin'?'🪙 코인':'🏦 계좌' %></td>
+      <td class="mono">
+        <% if (c.method==='coin') { %><%= c.coin_amount %> <%= c.coin_symbol %>
+        <% } else { %><%= c.depositor_name %> / <%= won(c.expected_amount) %><% } %>
+      </td>
+      <td><%= won(c.amount) %></td>
+      <td>
+        <% if (c.status==='pending') { %><span class="tag yellow">대기</span>
+        <% } else if (c.status==='approved') { %><span class="tag green">승인</span>
+        <% } else if (c.status==='rejected') { %><span class="tag red">반려</span>
+        <% } else { %><span class="tag gray">만료</span><% } %>
+      </td>
+      <td class="muted"><%= new Date(c.created_at).toLocaleString('ko-KR') %></td>
+      <td>
+        <% if (c.status==='pending') { %>
+        <form method="post" action="/charges/<%= c.id %>/approve" class="inline"><button class="btn green sm">승인</button></form>
+        <form method="post" action="/charges/<%= c.id %>/reject" class="inline"><button class="btn red sm">반려</button></form>
+        <% } %>
+      </td>
+    </tr>
+    <% }) %>
+  </table>
+</div>
+
+<h2>📩 최근 입금 알림 수신 로그</h2>
+<div class="card">
+  <p class="muted" style="font-size:12px">포워딩 앱에서 <span class="mono">/api/webhook/bank</span> 로 전송된 입금 알림 기록입니다.</p>
+  <% if (!notifications.length) { %><p class="muted">수신된 알림이 없습니다.</p><% } else { %>
+  <table>
+    <tr><th>입금자</th><th>금액</th><th>매칭</th><th>원문</th><th>시각</th></tr>
+    <% notifications.forEach(n => { %>
+    <tr>
+      <td><%= n.depositor %></td>
+      <td><%= n.amount!=null ? won(n.amount) : '-' %></td>
+      <td><%= n.matched ? '<span class="tag green">성공 #'+n.charge_id+'</span>' : '<span class="tag gray">미매칭</span>' %></td>
+      <td class="muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= n.raw %></td>
+      <td class="muted"><%= new Date(n.created_at).toLocaleString('ko-KR') %></td>
+    </tr>
+    <% }) %>
+  </table>
+  <% } %>
+</div>
+<%- include('partials/footer') %>

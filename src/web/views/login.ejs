@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>관리자 로그인</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div style="font-size:40px">🏪</div>
+      <h1>자판기 관리자 대시보드</h1>
+      <p class="muted">디스코드 계정으로 로그인하세요.<br/>관리자로 등록된 계정만 접근할 수 있습니다.</p>
+      <% if (error) { %><div class="alert" style="background:rgba(237,66,69,.12);color:#ed4245"><%= error %></div><% } %>
+      <a class="btn" href="<%= loginUrl %>">🔗 Discord로 로그인</a>
+    </div>
+  </div>
+</body>
+</html>

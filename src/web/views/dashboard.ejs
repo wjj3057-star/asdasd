@@ -1,0 +1,53 @@
+<%- include('partials/header') %>
+<h1>📊 대시보드</h1>
+<p class="sub">자판기 현황을 한눈에 확인하세요.</p>
+
+<div class="grid cols-4">
+  <div class="card stat"><div class="label">총 유저</div><div class="value"><%= stat.userCount %></div></div>
+  <div class="card stat"><div class="label">보유 잔액 합계</div><div class="value yellow"><%= won(stat.totalBalance) %></div></div>
+  <div class="card stat"><div class="label">누적 매출</div><div class="value green"><%= won(stat.revenue) %></div></div>
+  <div class="card stat"><div class="label">대기중 충전</div><div class="value"><%= stat.pendingCharges %></div></div>
+  <div class="card stat"><div class="label">등록 제품</div><div class="value"><%= stat.productCount %></div></div>
+  <div class="card stat"><div class="label">판매가능 재고</div><div class="value"><%= stat.stockCount %></div></div>
+  <div class="card stat"><div class="label">판매 완료</div><div class="value"><%= stat.soldCount %></div></div>
+</div>
+
+<h2>⏳ 대기중 충전 요청</h2>
+<div class="card">
+  <% if (!pending.length) { %><p class="muted">대기중인 충전 요청이 없습니다.</p><% } else { %>
+  <table>
+    <tr><th>#</th><th>유저</th><th>방식</th><th>입금정보</th><th>충전액</th><th></th></tr>
+    <% pending.forEach(c => { %>
+    <tr>
+      <td>#<%= c.id %></td>
+      <td class="mono"><%= c.discord_id %></td>
+      <td><%= c.method==='coin'?'🪙 코인':'🏦 계좌' %></td>
+      <td><%= c.method==='coin' ? (c.coin_amount+' '+c.coin_symbol) : (c.depositor_name+' / '+won(c.expected_amount)) %></td>
+      <td><%= won(c.amount) %></td>
+      <td>
+        <form class="inline" method="post" action="/charges/<%= c.id %>/approve"><button class="btn green sm">승인</button></form>
+      </td>
+    </tr>
+    <% }) %>
+  </table>
+  <% } %>
+  <p style="margin-top:12px"><a href="/charges">전체 충전요청 보기 →</a></p>
+</div>
+
+<h2>🧾 최근 판매</h2>
+<div class="card">
+  <% if (!recentPurchases.length) { %><p class="muted">판매 내역이 없습니다.</p><% } else { %>
+  <table>
+    <tr><th>제품</th><th>유저</th><th>금액</th><th>시각</th></tr>
+    <% recentPurchases.forEach(p => { %>
+    <tr>
+      <td><%= p.product_name %></td>
+      <td class="mono"><%= p.discord_id %></td>
+      <td><%= won(p.price) %></td>
+      <td class="muted"><%= new Date(p.created_at).toLocaleString('ko-KR') %></td>
+    </tr>
+    <% }) %>
+  </table>
+  <% } %>
+</div>
+<%- include('partials/footer') %>

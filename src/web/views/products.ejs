@@ -1,0 +1,79 @@
+<%- include('partials/header') %>
+<h1>📦 제품 / 재고</h1>
+<p class="sub">제품을 등록하고 재고(계정·코드 등)를 관리합니다.</p>
+
+<% if (!categories.length) { %>
+  <div class="alert" style="background:rgba(254,231,92,.12);color:#fee75c">
+    먼저 <a href="/categories">카테고리</a>를 하나 이상 만들어 주세요.
+  </div>
+<% } else { %>
+<div class="card">
+  <h2 style="margin-top:0">새 제품 추가</h2>
+  <form method="post" action="/products">
+    <div class="row">
+      <div><label>카테고리</label>
+        <select name="category_id" required>
+          <% categories.forEach(c => { %><option value="<%= c.id %>"><%= c.emoji %> <%= c.name %></option><% }) %>
+        </select>
+      </div>
+      <div><label>제품명</label><input type="text" name="name" required /></div>
+      <div><label>이모지</label><input type="text" name="emoji" placeholder="💎" /></div>
+    </div>
+    <div class="row">
+      <div><label>가격(원)</label><input type="number" name="price" value="0" required /></div>
+      <div><label>정렬순서</label><input type="number" name="position" value="0" /></div>
+      <div><label>판매활성</label><select name="is_active"><option value="1">활성</option><option value="">비활성</option></select></div>
+    </div>
+    <label>설명(선택)</label><input type="text" name="description" />
+    <div style="margin-top:14px"><button class="btn green">제품 추가</button></div>
+  </form>
+</div>
+<% } %>
+
+<h2>제품 목록</h2>
+<div class="card">
+  <% if (!products.length) { %><p class="muted">등록된 제품이 없습니다.</p><% } else { %>
+  <table>
+    <tr><th>제품</th><th>카테고리</th><th>가격</th><th>재고</th><th>상태</th><th>관리</th></tr>
+    <% products.forEach(p => { %>
+    <tr>
+      <td><b><%= p.emoji %> <%= p.name %></b><br/><span class="muted" style="font-size:12px"><%= p.description %></span></td>
+      <td><%= p.category ? (p.category.emoji+' '+p.category.name) : '-' %></td>
+      <td><%= won(p.price) %></td>
+      <td><%= p.stock>0 ? p.stock+'개' : '<span class="tag red">품절</span>' %></td>
+      <td><%= p.is_active ? '<span class="tag green">활성</span>' : '<span class="tag gray">비활성</span>' %></td>
+      <td>
+        <a class="btn sm gray" href="/products/<%= p.id %>/stock">📥 재고관리</a>
+        <details class="editor" style="display:inline-block">
+          <summary>수정</summary>
+        </details>
+      </td>
+    </tr>
+    <tr><td colspan="6" style="padding:0">
+      <details class="editor"><summary style="padding:8px 12px">✏️ #<%= p.id %> <%= p.name %> 수정/삭제</summary>
+      <div style="padding:12px">
+        <form method="post" action="/products/<%= p.id %>/update">
+          <div class="row">
+            <select name="category_id"><% categories.forEach(c => { %><option value="<%= c.id %>" <%= c.id===p.category_id?'selected':'' %>><%= c.name %></option><% }) %></select>
+            <input type="text" name="name" value="<%= p.name %>" />
+            <input type="text" name="emoji" value="<%= p.emoji %>" placeholder="이모지" />
+          </div>
+          <div class="row" style="margin-top:8px">
+            <input type="number" name="price" value="<%= p.price %>" />
+            <input type="number" name="position" value="<%= p.position %>" />
+            <select name="is_active"><option value="1" <%= p.is_active?'selected':'' %>>활성</option><option value="" <%= !p.is_active?'selected':'' %>>비활성</option></select>
+          </div>
+          <input type="text" name="description" value="<%= p.description %>" style="margin-top:8px" />
+          <div class="pill-row" style="margin-top:8px"><button class="btn sm">저장</button></div>
+        </form>
+        <form method="post" action="/products/<%= p.id %>/delete" onsubmit="return confirm('제품과 모든 재고가 삭제됩니다. 계속할까요?')" style="margin-top:6px">
+          <button class="btn red sm">제품 삭제</button>
+        </form>
+      </div>
+      </details>
+    </td></tr>
+    <% }) %>
+  </table>
+  <% } %>
+</div>
+<%- include('partials/footer') %>

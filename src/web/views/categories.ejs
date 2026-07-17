@@ -1,0 +1,47 @@
+<%- include('partials/header') %>
+<h1>🗂️ 카테고리</h1>
+<p class="sub">구매 시 표시되는 카테고리를 관리합니다.</p>
+
+<div class="grid cols-2">
+  <div class="card">
+    <h2 style="margin-top:0">새 카테고리 추가</h2>
+    <form method="post" action="/categories">
+      <label>이름</label><input type="text" name="name" required />
+      <div class="row">
+        <div><label>이모지(선택)</label><input type="text" name="emoji" placeholder="🎮" /></div>
+        <div><label>정렬순서</label><input type="number" name="position" value="0" /></div>
+      </div>
+      <label>설명(선택)</label><input type="text" name="description" />
+      <div style="margin-top:14px"><button class="btn green">추가</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">카테고리 목록</h2>
+    <% if (!categories.length) { %><p class="muted">등록된 카테고리가 없습니다.</p><% } %>
+    <% categories.forEach(c => { %>
+      <div style="border-bottom:1px solid var(--line); padding:10px 0">
+        <b><%= c.emoji %> <%= c.name %></b> <span class="muted">(#<%= c.id %>, 순서 <%= c.position %>)</span>
+        <div class="muted" style="font-size:12px"><%= c.description %></div>
+        <details class="editor">
+          <summary>수정 / 삭제</summary>
+          <form method="post" action="/categories/<%= c.id %>/update" style="margin-top:8px">
+            <div class="row">
+              <input type="text" name="name" value="<%= c.name %>" />
+              <input type="text" name="emoji" value="<%= c.emoji %>" placeholder="이모지" />
+              <input type="number" name="position" value="<%= c.position %>" />
+            </div>
+            <input type="text" name="description" value="<%= c.description %>" style="margin-top:8px" />
+            <div class="pill-row" style="margin-top:8px">
+              <button class="btn sm">저장</button>
+          </form>
+              <form method="post" action="/categories/<%= c.id %>/delete" onsubmit="return confirm('삭제하면 해당 카테고리의 제품/재고도 함께 삭제됩니다. 계속할까요?')">
+                <button class="btn red sm">삭제</button>
+              </form>
+            </div>
+        </details>
+      </div>
+    <% }) %>
+  </div>
+</div>
+<%- include('partials/footer') %>
