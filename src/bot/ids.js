@@ -15,8 +15,9 @@ module.exports = {
 
   CHARGE_ACCOUNT: 'vm:charge:account',
   CHARGE_COIN: 'vm:charge:coin',
+  SELECT_COIN: 'vm:charge:coin:sel', // 코인 종류 선택
   CHARGE_ACCOUNT_MODAL: 'vm:charge:account:modal',
-  CHARGE_COIN_MODAL: 'vm:charge:coin:modal',
+  CHARGE_COIN_MODAL: 'vm:charge:coin:modal', // 뒤에 :<coinId>
   DEPOSIT_NAME_MODAL: 'vm:deposit:modal', // vm:deposit:modal:<amount>
 
   INFO_HISTORY: 'vm:info:history',

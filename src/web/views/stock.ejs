@@ -1,44 +1,54 @@
-<%- include('partials/header') %>
-<h1>📥 재고 관리 · <%= product.emoji %> <%= product.name %></h1>
-<p class="sub">
-  <a href="/products">← 제품 목록</a> ·
-  카테고리 <%= category ? category.name : '-' %> · 가격 <%= won(product.price) %>
-</p>
+<%- include('partials/header', { title: '재고 관리' }) %>
+
+<div class="section-label">
+  <span class="eyebrow">INVENTORY</span>
+  <h2 class="section-title"><%= product.emoji || '📦' %> <%= product.name %></h2>
+  <p class="section-desc">
+    <a href="/inventory" class="link-green">← 재고 목록</a> ·
+    <%= category ? category.name : '미분류' %> · <%= won(product.price) %>
+  </p>
+</div>
 
 <% if (added) { %><div class="alert ok">✅ 재고 <%= added %>개를 추가했습니다.</div><% } %>
 
-<div class="grid cols-2">
-  <div class="card">
-    <h2 style="margin-top:0">재고 추가</h2>
-    <p class="muted" style="font-size:12px">한 줄에 하나씩 입력하세요. 각 줄이 하나의 판매 단위(계정/코드/키 등)가 됩니다. 구매 시 위에서부터 순서대로 지급됩니다.</p>
-    <form method="post" action="/products/<%= product.id %>/stock">
-      <textarea name="contents" placeholder="아이디1:비번1&#10;아이디2:비번2&#10;코드-XXXX-YYYY" style="min-height:200px"></textarea>
-      <div style="margin-top:12px"><button class="btn green">재고 추가</button></div>
-    </form>
-  </div>
+<div class="card">
+  <h2 class="section-title" style="font-size:20px; margin:0 0 6px">재고 추가</h2>
+  <p class="muted" style="font-size:14px; margin:0 0 12px">한 줄에 하나씩 입력하세요. 각 줄이 하나의 판매 단위(계정/코드/키 등)가 되고, 구매 시 위에서부터 순서대로 지급됩니다.</p>
+  <form method="post" action="/products/<%= product.id %>/stock">
+    <textarea name="contents" placeholder="아이디1:비번1&#10;아이디2:비번2&#10;코드-XXXX-YYYY" style="min-height:180px"></textarea>
+    <div style="margin-top:14px"><button class="btn green">재고 추가</button></div>
+  </form>
+</div>
 
-  <div class="card">
-    <h2 style="margin-top:0">현재 재고 (<%= stock.filter(s=>s.status==='available').length %>개 판매가능)</h2>
-    <% if (!stock.length) { %><p class="muted">재고가 없습니다.</p><% } else { %>
-    <table>
-      <tr><th>#</th><th>내용</th><th>상태</th><th></th></tr>
-      <% stock.slice().reverse().forEach(s => { %>
+<div class="card">
+  <div class="between">
+    <h2 class="section-title" style="font-size:20px; margin:0">현재 재고</h2>
+    <span class="tag green"><%= stock.filter(s=>s.status==='available').length %>개 판매가능</span>
+  </div>
+  <div class="scroll-x" style="margin-top:14px">
+  <% if (!stock.length) { %><p class="muted">재고가 없습니다.</p><% } else { %>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>내용</th><th>상태</th><th></th></tr></thead>
+    <tbody>
+    <% stock.slice().reverse().forEach(s => { %>
       <tr>
-        <td><%= s.id %></td>
-        <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= s.status==='sold' ? '••••••••' : s.content %></td>
-        <td><%= s.status==='available' ? '<span class="tag green">판매가능</span>' : '<span class="tag gray">판매완료</span>' %></td>
+        <td class="mono"><%= s.id %></td>
+        <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= s.status==='sold' ? '•••••• (판매됨)' : s.content %></td>
+        <td><%- s.status==='available' ? '<span class="tag green">판매가능</span>' : '<span class="tag gray">판매완료</span>' %></td>
         <td>
           <% if (s.status==='available') { %>
-          <form method="post" action="/stock/<%= s.id %>/delete" class="inline">
+          <form method="post" action="/stock/<%= s.id %>/delete" style="display:inline">
             <input type="hidden" name="product_id" value="<%= product.id %>" />
             <button class="btn red sm">삭제</button>
           </form>
           <% } %>
         </td>
       </tr>
-      <% }) %>
-    </table>
-    <% } %>
+    <% }) %>
+    </tbody>
+  </table>
+  <% } %>
   </div>
 </div>
+
 <%- include('partials/footer') %>

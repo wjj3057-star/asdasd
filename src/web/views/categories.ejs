@@ -1,47 +1,67 @@
-<%- include('partials/header') %>
-<h1>🗂️ 카테고리</h1>
-<p class="sub">구매 시 표시되는 카테고리를 관리합니다.</p>
+<%- include('partials/header', { title: '카테고리' }) %>
 
-<div class="grid cols-2">
-  <div class="card">
-    <h2 style="margin-top:0">새 카테고리 추가</h2>
+<div class="section-label">
+  <span class="eyebrow">STRUCTURE</span>
+  <h2 class="section-title">카테고리</h2>
+  <p class="section-desc">Discord 구매 선택창에 표시되는 순서와 묶음을 관리합니다.</p>
+</div>
+
+<details class="editor" style="margin-bottom:16px" <%= categories.length ? '' : 'open' %>>
+  <summary><span class="btn green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> 카테고리 추가</span></summary>
+  <div class="card" style="margin-top:12px">
     <form method="post" action="/categories">
-      <label>이름</label><input type="text" name="name" required />
-      <div class="row">
-        <div><label>이모지(선택)</label><input type="text" name="emoji" placeholder="🎮" /></div>
-        <div><label>정렬순서</label><input type="number" name="position" value="0" /></div>
+      <div class="form-row">
+        <div><label>이름</label><input type="text" name="name" required /></div>
+        <div><label>이모지</label><input type="text" name="emoji" placeholder="🎮" style="max-width:110px" /></div>
+        <div><label>정렬</label><input type="number" name="position" value="0" style="max-width:100px" /></div>
       </div>
-      <label>설명(선택)</label><input type="text" name="description" />
-      <div style="margin-top:14px"><button class="btn green">추가</button></div>
+      <label>설명</label><input type="text" name="description" placeholder="수량별 게임 코인" />
+      <div style="margin-top:16px"><button class="btn green">추가</button></div>
     </form>
   </div>
+</details>
 
-  <div class="card">
-    <h2 style="margin-top:0">카테고리 목록</h2>
-    <% if (!categories.length) { %><p class="muted">등록된 카테고리가 없습니다.</p><% } %>
-    <% categories.forEach(c => { %>
-      <div style="border-bottom:1px solid var(--line); padding:10px 0">
-        <b><%= c.emoji %> <%= c.name %></b> <span class="muted">(#<%= c.id %>, 순서 <%= c.position %>)</span>
-        <div class="muted" style="font-size:12px"><%= c.description %></div>
-        <details class="editor">
-          <summary>수정 / 삭제</summary>
-          <form method="post" action="/categories/<%= c.id %>/update" style="margin-top:8px">
-            <div class="row">
-              <input type="text" name="name" value="<%= c.name %>" />
-              <input type="text" name="emoji" value="<%= c.emoji %>" placeholder="이모지" />
-              <input type="number" name="position" value="<%= c.position %>" />
-            </div>
-            <input type="text" name="description" value="<%= c.description %>" style="margin-top:8px" />
-            <div class="pill-row" style="margin-top:8px">
-              <button class="btn sm">저장</button>
-          </form>
-              <form method="post" action="/categories/<%= c.id %>/delete" onsubmit="return confirm('삭제하면 해당 카테고리의 제품/재고도 함께 삭제됩니다. 계속할까요?')">
-                <button class="btn red sm">삭제</button>
-              </form>
-            </div>
-        </details>
+<div class="stack">
+  <% categories.forEach((c, i) => { %>
+  <div class="card item-card">
+    <span class="index-badge"><%= String(i + 1).padStart(2, '0') %></span>
+    <div class="item-emoji" style="margin-bottom:16px"><%= c.emoji || '🗂️' %></div>
+    <div class="name" style="font-size:24px; font-weight:800"><%= c.name %></div>
+    <div class="desc" style="color:var(--muted); margin-top:4px"><%= c.description || '설명 없음' %></div>
+    <hr class="hr" />
+    <div class="between">
+      <span class="muted"><%= c.productCount %>개 상품</span>
+      <span class="tag green">활성</span>
+    </div>
+
+    <details class="editor" style="margin-top:8px">
+      <summary>수정 / 삭제</summary>
+      <div style="padding-top:12px">
+        <form method="post" action="/categories/<%= c.id %>/update">
+          <div class="form-row">
+            <input type="text" name="name" value="<%= c.name %>" />
+            <input type="text" name="emoji" value="<%= c.emoji %>" placeholder="이모지" style="max-width:90px" />
+            <input type="number" name="position" value="<%= c.position %>" style="max-width:90px" />
+          </div>
+          <input type="text" name="description" value="<%= c.description %>" style="margin-top:10px" />
+          <div class="btn-row" style="margin-top:12px"><button class="btn green sm">저장</button></div>
+        </form>
+        <form method="post" action="/categories/<%= c.id %>/delete" onsubmit="return confirm('카테고리의 상품/재고도 함께 삭제됩니다. 계속할까요?')" style="margin-top:8px">
+          <button class="btn red sm">삭제</button>
+        </form>
       </div>
-    <% }) %>
+    </details>
+  </div>
+  <% }) %>
+  <% if (!categories.length) { %><p class="muted">등록된 카테고리가 없습니다.</p><% } %>
+</div>
+
+<div class="banner green" style="margin-top:18px">
+  <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+  <div>
+    <b style="color:var(--text)">Discord 선택 흐름</b>
+    <span class="flow">구매 버튼 <span style="color:var(--green)">→</span> 카테고리 선택 <span style="color:var(--green)">→</span> 상품 선택 <span style="color:var(--green)">→</span> 결제 확인 <span style="color:var(--green)">→</span> 재고 자동 지급</span>
   </div>
 </div>
+
 <%- include('partials/footer') %>

@@ -11,7 +11,9 @@ const {
   Charges,
   Purchases,
   BankNotifications,
+  Coins,
   stats,
+  dashboard,
 } = require('../database/models');
 const { approveCharge, rejectCharge } = require('../payments/chargeService');
 const { won } = require('../util');
@@ -23,33 +25,62 @@ function setPanelRefresher(fn) {
   refreshPanel = fn;
 }
 
+// 봇 상태 (라이브 상태 카드용)
+function botStatus() {
+  try {
+    const { client } = require('../bot/client');
+    if (client && client.isReady && client.isReady()) {
+      return { botOnline: true, ping: Math.max(0, Math.round(client.ws.ping)) };
+    }
+  } catch (e) {
+    /* 봇 미기동 */
+  }
+  return { botOnline: false, ping: 0 };
+}
+
 const router = express.Router();
 router.use(requireAdmin);
+
+// 모든 뷰에서 접근 가능한 공통 로컬 (동기화 결과 배너 등)
+router.use((req, res, next) => {
+  res.locals.sync = req.query.sync;
+  next();
+});
 
 const render = (res, view, extra = {}) =>
   res.render(view, { settings: getAllSettings(), won, ...extra });
 
 /* ---------------- 대시보드 ---------------- */
 router.get('/', (req, res) => {
+  const dash = dashboard();
+  const userMap = {};
+  for (const u of Users.all()) userMap[u.discord_id] = u;
   render(res, 'dashboard', {
     active: 'dashboard',
-    stat: stats(),
-    pending: Charges.pending().slice(0, 8),
-    recentPurchases: Purchases.recent(8),
+    title: '대시보드',
+    dash,
+    sys: botStatus(),
+    userMap,
     user: req.session.user,
   });
 });
 
 /* ---------------- 설정 (상점명/설명/임베드/계좌/코인) ---------------- */
 router.get('/settings', (req, res) => {
-  render(res, 'settings', { active: 'settings', user: req.session.user, saved: req.query.saved });
+  render(res, 'settings', {
+    active: 'settings',
+    title: '상점 설정',
+    user: req.session.user,
+    saved: req.query.saved,
+    coins: Coins.all(),
+  });
 });
 
 router.post('/settings', async (req, res) => {
   const keys = [
     'shop_name', 'shop_description', 'embed_color', 'embed_image', 'embed_thumbnail',
     'embed_footer', 'bank_name', 'bank_account', 'bank_holder', 'charge_min',
-    'charge_expire_minutes', 'coin_symbol', 'coin_network', 'coin_wallet', 'coin_krw_rate',
+    'charge_expire_minutes', 'coin_krw_rate',
   ];
   const patch = {};
   for (const k of keys) if (req.body[k] !== undefined) patch[k] = req.body[k];
@@ -58,9 +89,48 @@ router.post('/settings', async (req, res) => {
   res.redirect('/settings?saved=1');
 });
 
+/* ---------------- 코인 관리 ---------------- */
+router.post('/coins', (req, res) => {
+  Coins.create({
+    symbol: req.body.symbol,
+    network: req.body.network,
+    wallet: req.body.wallet,
+    krw_rate: req.body.krw_rate,
+    decimals: req.body.decimals,
+    enabled: req.body.enabled ? 1 : 0,
+    position: req.body.position,
+  });
+  res.redirect('/settings?saved=coin');
+});
+router.post('/coins/:id/update', (req, res) => {
+  Coins.update(parseInt(req.params.id, 10), {
+    symbol: req.body.symbol,
+    network: req.body.network,
+    wallet: req.body.wallet,
+    krw_rate: req.body.krw_rate,
+    decimals: req.body.decimals,
+    enabled: req.body.enabled ? 1 : 0,
+    position: req.body.position,
+  });
+  res.redirect('/settings?saved=coin');
+});
+router.post('/coins/:id/delete', (req, res) => {
+  Coins.remove(parseInt(req.params.id, 10));
+  res.redirect('/settings?saved=coin');
+});
+
 /* ---------------- 카테고리 ---------------- */
 router.get('/categories', (req, res) => {
-  render(res, 'categories', { active: 'categories', user: req.session.user, categories: Categories.all() });
+  const categories = Categories.all().map((c) => ({
+    ...c,
+    productCount: Products.byCategory(c.id, false).length,
+  }));
+  render(res, 'categories', {
+    active: 'categories',
+    title: '카테고리',
+    user: req.session.user,
+    categories,
+  });
 });
 router.post('/categories', (req, res) => {
   Categories.create({
@@ -94,6 +164,7 @@ router.get('/products', (req, res) => {
   }));
   render(res, 'products', {
     active: 'products',
+    title: '상품 관리',
     user: req.session.user,
     products,
     categories: Categories.all(),
@@ -128,12 +199,28 @@ router.post('/products/:id/delete', (req, res) => {
   res.redirect('/products');
 });
 
-/* ---------------- 재고 ---------------- */
+/* ---------------- 재고 관리 (전체 개요) ---------------- */
+router.get('/inventory', (req, res) => {
+  const products = Products.all().map((p) => ({
+    ...p,
+    category: Categories.get(p.category_id),
+    stock: Products.stockCount(p.id),
+  }));
+  render(res, 'inventory', {
+    active: 'inventory',
+    title: '재고 관리',
+    user: req.session.user,
+    products,
+  });
+});
+
+/* ---------------- 재고 (제품별 상세) ---------------- */
 router.get('/products/:id/stock', (req, res) => {
   const product = Products.get(parseInt(req.params.id, 10));
-  if (!product) return res.redirect('/products');
+  if (!product) return res.redirect('/inventory');
   render(res, 'stock', {
-    active: 'products',
+    active: 'inventory',
+    title: '재고 관리',
     user: req.session.user,
     product,
     category: Categories.get(product.category_id),
@@ -156,13 +243,30 @@ router.post('/stock/:sid/delete', (req, res) => {
   res.redirect(`/products/${pid}/stock`);
 });
 
+/* ---------------- 주문 내역 ---------------- */
+router.get('/orders', (req, res) => {
+  const orders = Purchases.recent(200);
+  const userMap = {};
+  for (const u of Users.all()) userMap[u.discord_id] = u;
+  render(res, 'orders', {
+    active: 'orders',
+    title: '주문 내역',
+    user: req.session.user,
+    orders,
+    userMap,
+  });
+});
+
 /* ---------------- 충전 요청 관리 ---------------- */
 router.get('/charges', (req, res) => {
   const list = Charges.all(200).map((c) => ({ ...c, userObj: Users.get(c.discord_id) }));
   render(res, 'charges', {
     active: 'charges',
+    title: '충전 관리',
     user: req.session.user,
     charges: list,
+    pendingCount: Charges.pending().length,
+    coins: Coins.all(),
     notifications: BankNotifications.recent(20),
   });
 });
@@ -175,9 +279,13 @@ router.post('/charges/:id/reject', (req, res) => {
   res.redirect('/charges');
 });
 
-/* ---------------- 유저 관리 ---------------- */
+/* ---------------- 고객 관리 ---------------- */
 router.get('/users', (req, res) => {
-  render(res, 'users', { active: 'users', user: req.session.user, users: Users.all() });
+  const users = Users.all().map((u) => ({
+    ...u,
+    purchaseCount: Purchases.byUser(u.discord_id, 9999).length,
+  }));
+  render(res, 'users', { active: 'users', title: '고객 관리', user: req.session.user, users });
 });
 router.post('/users/:id/adjust', (req, res) => {
   const amount = parseInt(req.body.amount || '0', 10);
@@ -189,10 +297,12 @@ router.post('/users/:id/adjust', (req, res) => {
   res.redirect('/users');
 });
 
-/* ---------------- 패널 설치/갱신 ---------------- */
+/* ---------------- 패널 설치/갱신 (상점 메시지 동기화) ---------------- */
 router.post('/panel/refresh', async (req, res) => {
   const ok = await refreshPanel();
-  res.redirect('/settings?saved=' + (ok ? 'panel' : 'panelfail'));
+  const back = req.get('Referer') || '/';
+  const sep = back.includes('?') ? '&' : '?';
+  res.redirect(`${back}${sep}sync=${ok ? 'ok' : 'fail'}`);
 });
 
 module.exports = { router, setPanelRefresher };

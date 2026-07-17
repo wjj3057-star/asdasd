@@ -304,8 +304,8 @@ const Charges = {
     const info = db
       .prepare(
         `INSERT INTO charge_requests
-         (discord_id, method, amount, expected_amount, depositor_name, coin_symbol, coin_amount, address, status, memo, created_at)
-         VALUES (?,?,?,?,?,?,?,?, 'pending', ?, ?)`
+         (discord_id, method, amount, expected_amount, depositor_name, coin_symbol, coin_network, coin_amount, address, status, memo, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?, 'pending', ?, ?)`
       )
       .run(
         rec.discord_id,
@@ -314,6 +314,7 @@ const Charges = {
         rec.expected_amount,
         rec.depositor_name || '',
         rec.coin_symbol || '',
+        rec.coin_network || '',
         rec.coin_amount || '',
         rec.address || '',
         rec.memo || '',
@@ -358,12 +359,20 @@ const Charges = {
     }
     return rows[0];
   },
-  findPendingCoinMatch(amountStr) {
-    return db
+  // 코인: 전송수량 + (선택)심볼/네트워크로 매칭. 코인별 고유수량이라 수량만으로도 매칭되지만
+  // 서로 다른 코인의 수량이 우연히 겹치는 것을 막기 위해 심볼/네트워크가 주어지면 함께 검증한다.
+  findPendingCoinMatch(amountStr, symbol, network) {
+    const rows = db
       .prepare(
-        "SELECT * FROM charge_requests WHERE method='coin' AND status='pending' AND coin_amount=? ORDER BY id ASC LIMIT 1"
+        "SELECT * FROM charge_requests WHERE method='coin' AND status='pending' AND coin_amount=? ORDER BY id ASC"
       )
-      .get(String(amountStr));
+      .all(String(amountStr));
+    if (!rows.length) return null;
+    const norm = (v) => String(v || '').toUpperCase().replace(/\s|-|_/g, '');
+    let filtered = rows;
+    if (symbol) filtered = filtered.filter((r) => norm(r.coin_symbol) === norm(symbol));
+    if (network) filtered = filtered.filter((r) => norm(r.coin_network) === norm(network));
+    return (filtered[0] || (symbol || network ? null : rows[0])) || null;
   },
   setStatus(id, status, memo) {
     db.prepare(
@@ -410,6 +419,75 @@ const BankNotifications = {
 };
 
 /* =========================================================
+ * Coins (코인충전 지원 코인 목록)
+ * =======================================================*/
+const Coins = {
+  all() {
+    return db.prepare('SELECT * FROM coins ORDER BY position ASC, id ASC').all();
+  },
+  enabled() {
+    return db
+      .prepare("SELECT * FROM coins WHERE enabled=1 AND wallet<>'' ORDER BY position ASC, id ASC")
+      .all();
+  },
+  get(id) {
+    return db.prepare('SELECT * FROM coins WHERE id=?').get(id);
+  },
+  create(c) {
+    const info = db
+      .prepare(
+        'INSERT INTO coins (symbol, network, wallet, krw_rate, decimals, enabled, position, created_at) VALUES (?,?,?,?,?,?,?,?)'
+      )
+      .run(
+        c.symbol,
+        c.network,
+        c.wallet || '',
+        Number(c.krw_rate) || 0,
+        parseInt(c.decimals || '6', 10),
+        c.enabled ? 1 : 0,
+        parseInt(c.position || '0', 10),
+        now()
+      );
+    return info.lastInsertRowid;
+  },
+  update(id, c) {
+    db.prepare(
+      'UPDATE coins SET symbol=?, network=?, wallet=?, krw_rate=?, decimals=?, enabled=?, position=? WHERE id=?'
+    ).run(
+      c.symbol,
+      c.network,
+      c.wallet || '',
+      Number(c.krw_rate) || 0,
+      parseInt(c.decimals || '6', 10),
+      c.enabled ? 1 : 0,
+      parseInt(c.position || '0', 10),
+      id
+    );
+  },
+  remove(id) {
+    db.prepare('DELETE FROM coins WHERE id=?').run(id);
+  },
+};
+
+// 최초 실행 시 기본 코인 시드 (LTC, SOL, USDT-TRC20, USDT-BSC)
+function seedCoins() {
+  const count = db.prepare('SELECT COUNT(*) c FROM coins').get().c;
+  if (count > 0) return;
+  const legacyWallet = getSetting('coin_wallet');
+  const legacyRate = parseFloat(getSetting('coin_krw_rate')) || 1400;
+  const defaults = [
+    { symbol: 'USDT', network: 'TRC20', wallet: legacyWallet || '', krw_rate: legacyRate, decimals: 6, position: 0 },
+    { symbol: 'USDT', network: 'BEP20', wallet: '', krw_rate: legacyRate, decimals: 18, position: 1 },
+    { symbol: 'SOL', network: 'Solana', wallet: '', krw_rate: 200000, decimals: 9, position: 2 },
+    { symbol: 'LTC', network: 'Litecoin', wallet: '', krw_rate: 130000, decimals: 8, position: 3 },
+  ];
+  for (const d of defaults) {
+    Coins.create({ ...d, enabled: 1 });
+  }
+}
+seedCoins();
+
+/* =========================================================
  * 통계
  * =======================================================*/
 function stats() {
@@ -440,6 +518,88 @@ function stats() {
   };
 }
 
+/* =========================================================
+ * 대시보드 분석 지표
+ * =======================================================*/
+const LOW_STOCK_THRESHOLD = 5;
+
+function startOfDay(offsetDays = 0) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offsetDays);
+  return d.getTime();
+}
+
+function revenueBetween(start, end) {
+  return db
+    .prepare('SELECT COALESCE(SUM(price),0) s FROM purchases WHERE created_at>=? AND created_at<?')
+    .get(start, end).s;
+}
+function ordersBetween(start, end) {
+  return db
+    .prepare('SELECT COUNT(*) c FROM purchases WHERE created_at>=? AND created_at<?')
+    .get(start, end).c;
+}
+
+// 최근 N일 일별 매출 (오늘 포함, 과거→현재 순)
+function dailyRevenue(days) {
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const start = startOfDay(-i);
+    const end = startOfDay(-i + 1);
+    out.push({ date: start, revenue: revenueBetween(start, end) });
+  }
+  return out;
+}
+
+function lowStockProducts() {
+  const rows = Products.all().filter((p) => p.is_active);
+  return rows
+    .map((p) => ({ ...p, stock: Products.stockCount(p.id) }))
+    .filter((p) => p.stock <= LOW_STOCK_THRESHOLD);
+}
+
+function chargeSuccessRate() {
+  const resolved = db
+    .prepare("SELECT COUNT(*) c FROM charge_requests WHERE status IN ('approved','rejected','expired')")
+    .get().c;
+  const approved = db
+    .prepare("SELECT COUNT(*) c FROM charge_requests WHERE status='approved'")
+    .get().c;
+  if (!resolved) return 100;
+  return Math.round((approved / resolved) * 1000) / 10;
+}
+
+function dashboard() {
+  const todayStart = startOfDay(0);
+  const yStart = startOfDay(-1);
+  const tomorrow = startOfDay(1);
+
+  const todayRevenue = revenueBetween(todayStart, tomorrow);
+  const yRevenue = revenueBetween(yStart, todayStart);
+  const todayOrders = ordersBetween(todayStart, tomorrow);
+  const yOrders = ordersBetween(yStart, todayStart);
+
+  const revPct = yRevenue > 0 ? Math.round(((todayRevenue - yRevenue) / yRevenue) * 1000) / 10 : null;
+
+  return {
+    todayRevenue,
+    yRevenue,
+    revPct,
+    todayOrders,
+    yOrders,
+    orderDiff: todayOrders - yOrders,
+    lowStock: lowStockProducts(),
+    pendingCharges: db
+      .prepare("SELECT COUNT(*) c FROM charge_requests WHERE status='pending'")
+      .get().c,
+    successRate: chargeSuccessRate(),
+    daily7: dailyRevenue(7),
+    daily30: dailyRevenue(30),
+    recentOrders: Purchases.recent(6),
+  };
+}
+
 module.exports = {
   db,
   DEFAULT_SETTINGS,
@@ -454,5 +614,10 @@ module.exports = {
   Purchases,
   Charges,
   BankNotifications,
+  Coins,
   stats,
+  dashboard,
+  dailyRevenue,
+  lowStockProducts,
+  chargeSuccessRate,
 };

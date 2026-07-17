@@ -1,53 +1,217 @@
-<%- include('partials/header') %>
-<h1>📊 대시보드</h1>
-<p class="sub">자판기 현황을 한눈에 확인하세요.</p>
+<%- include('partials/header', { title: '대시보드' }) %>
 
-<div class="grid cols-4">
-  <div class="card stat"><div class="label">총 유저</div><div class="value"><%= stat.userCount %></div></div>
-  <div class="card stat"><div class="label">보유 잔액 합계</div><div class="value yellow"><%= won(stat.totalBalance) %></div></div>
-  <div class="card stat"><div class="label">누적 매출</div><div class="value green"><%= won(stat.revenue) %></div></div>
-  <div class="card stat"><div class="label">대기중 충전</div><div class="value"><%= stat.pendingCharges %></div></div>
-  <div class="card stat"><div class="label">등록 제품</div><div class="value"><%= stat.productCount %></div></div>
-  <div class="card stat"><div class="label">판매가능 재고</div><div class="value"><%= stat.stockCount %></div></div>
-  <div class="card stat"><div class="label">판매 완료</div><div class="value"><%= stat.soldCount %></div></div>
+<%
+  function money(n){ return '₩' + Number(n||0).toLocaleString('ko-KR'); }
+  const d = dash;
+%>
+
+<!-- Stat cards -->
+<div class="stack" style="margin-top:26px">
+  <div class="card stat">
+    <div class="tile green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>
+    </div>
+    <div>
+      <div class="label">오늘 매출</div>
+      <div class="value"><%= money(d.todayRevenue) %></div>
+      <% if (d.revPct === null) { %><div class="sub flat">어제 매출 없음</div>
+      <% } else if (d.revPct >= 0) { %><div class="sub up">어제보다 +<%= d.revPct %>%</div>
+      <% } else { %><div class="sub warn">어제보다 <%= d.revPct %>%</div><% } %>
+    </div>
+  </div>
+
+  <div class="card stat">
+    <div class="tile green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.4 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L22 7H6"/></svg>
+    </div>
+    <div>
+      <div class="label">오늘 주문</div>
+      <div class="value"><%= d.todayOrders %>건</div>
+      <% if (d.orderDiff >= 0) { %><div class="sub up">어제보다 +<%= d.orderDiff %>건</div>
+      <% } else { %><div class="sub warn">어제보다 <%= d.orderDiff %>건</div><% } %>
+    </div>
+  </div>
+
+  <div class="card stat">
+    <div class="tile gold">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
+    </div>
+    <div>
+      <div class="label">재고 부족</div>
+      <div class="value" style="color:var(--gold)"><%= d.lowStock.length %>개</div>
+      <div class="sub warn"><%= d.lowStock.length ? '확인이 필요해요' : '모든 재고 충분' %></div>
+    </div>
+  </div>
+
+  <div class="card stat">
+    <div class="tile blue">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </div>
+    <div>
+      <div class="label">입금 확인 대기</div>
+      <div class="value" style="color:var(--blue)"><%= d.pendingCharges %>건</div>
+      <div class="sub info">자동 대조 진행 중</div>
+    </div>
+  </div>
 </div>
 
-<h2>⏳ 대기중 충전 요청</h2>
-<div class="card">
-  <% if (!pending.length) { %><p class="muted">대기중인 충전 요청이 없습니다.</p><% } else { %>
-  <table>
-    <tr><th>#</th><th>유저</th><th>방식</th><th>입금정보</th><th>충전액</th><th></th></tr>
-    <% pending.forEach(c => { %>
-    <tr>
-      <td>#<%= c.id %></td>
-      <td class="mono"><%= c.discord_id %></td>
-      <td><%= c.method==='coin'?'🪙 코인':'🏦 계좌' %></td>
-      <td><%= c.method==='coin' ? (c.coin_amount+' '+c.coin_symbol) : (c.depositor_name+' / '+won(c.expected_amount)) %></td>
-      <td><%= won(c.amount) %></td>
-      <td>
-        <form class="inline" method="post" action="/charges/<%= c.id %>/approve"><button class="btn green sm">승인</button></form>
-      </td>
-    </tr>
-    <% }) %>
-  </table>
+<!-- Revenue chart -->
+<div class="card" style="margin-top:16px">
+  <div class="chart-head">
+    <div>
+      <span class="eyebrow">REVENUE</span>
+      <h2 class="section-title" style="font-size:22px; margin:8px 0 0">매출 추이</h2>
+    </div>
+    <div class="seg" id="revSeg">
+      <button class="active" data-range="7">7일</button>
+      <button data-range="30">30일</button>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <svg class="chart-svg" id="revChart" viewBox="0 0 720 210" preserveAspectRatio="none"></svg>
+    <div id="revLabels" class="between" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- Live status -->
+<div class="card" style="margin-top:16px">
+  <div class="between">
+    <div>
+      <span class="eyebrow">LIVE STATUS</span>
+      <h2 class="section-title" style="font-size:22px; margin:8px 0 0">시스템 상태</h2>
+    </div>
+    <span class="live-badge"><span class="dot"></span> LIVE</span>
+  </div>
+
+  <div style="margin-top:20px">
+    <div class="status-item">
+      <div class="tile plain sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M8.5 13h.01M15.5 13h.01M9 17h6"/></svg></div>
+      <div class="meta"><b>Discord 봇</b><div><%= sys.botOnline ? '게이트웨이 지연 ' + sys.ping + 'ms' : '오프라인 (토큰 미설정)' %></div></div>
+      <span class="status-ok" style="<%= sys.botOnline ? '' : 'color:var(--muted)' %>"><span class="dot" style="<%= sys.botOnline ? '' : 'background:var(--muted);box-shadow:none' %>"></span> <%= sys.botOnline ? '정상' : '대기' %></span>
+    </div>
+    <div class="status-item">
+      <div class="tile plain sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></div>
+      <div class="meta"><b>웹 대시보드</b><div>실시간 저장 활성</div></div>
+      <span class="status-ok"><span class="dot"></span> 정상</span>
+    </div>
+    <div class="status-item">
+      <div class="tile plain sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></div>
+      <div class="meta"><b>자동 입금 확인</b><div>30초마다 확인</div></div>
+      <span class="status-ok"><span class="dot"></span> 정상</span>
+    </div>
+    <div class="status-item">
+      <div class="tile plain sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="16" cy="15" r="6"/></svg></div>
+      <div class="meta"><b>코인 결제</b><div>웹훅 정상</div></div>
+      <span class="status-ok"><span class="dot"></span> 정상</span>
+    </div>
+  </div>
+
+  <div class="progress-row">
+    <span class="plabel">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+      자동 충전 성공률
+    </span>
+    <span class="pval"><%= d.successRate %>%</span>
+  </div>
+  <div class="bar"><span style="width:<%= d.successRate %>%"></span></div>
+</div>
+
+<!-- Latest activity -->
+<div class="card" style="margin-top:16px">
+  <div class="between" style="align-items:flex-start">
+    <div>
+      <span class="eyebrow">LATEST ACTIVITY</span>
+      <h2 class="section-title" style="font-size:22px; margin:8px 0 0">최근 주문</h2>
+    </div>
+    <a href="/orders" class="link-green">전체 주문 보기 →</a>
+  </div>
+
+  <div class="scroll-x" style="margin-top:14px">
+  <% if (!d.recentOrders.length) { %>
+    <p class="muted">아직 주문이 없습니다.</p>
+  <% } else { %>
+    <table class="tbl">
+      <thead><tr><th>주문번호</th><th>고객</th><th style="text-align:right">금액</th></tr></thead>
+      <tbody>
+      <% d.recentOrders.forEach(function(o){
+           const dt = new Date(o.created_at);
+           const ord = 'ORD-' + dt.getFullYear() + String(dt.getMonth()+1).padStart(2,'0') + String(dt.getDate()).padStart(2,'0') + '-' + String(o.id).padStart(4,'0');
+           const uname = (userMap[o.discord_id] && userMap[o.discord_id].username) || o.discord_id;
+      %>
+        <tr>
+          <td class="mono"><%= ord %></td>
+          <td><div class="cust"><span class="ini"><%= String(uname).slice(0,1) %></span><span><%= uname %></span></div></td>
+          <td style="text-align:right; font-weight:700"><%= money(o.price) %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
   <% } %>
-  <p style="margin-top:12px"><a href="/charges">전체 충전요청 보기 →</a></p>
+  </div>
 </div>
 
-<h2>🧾 최근 판매</h2>
-<div class="card">
-  <% if (!recentPurchases.length) { %><p class="muted">판매 내역이 없습니다.</p><% } else { %>
-  <table>
-    <tr><th>제품</th><th>유저</th><th>금액</th><th>시각</th></tr>
-    <% recentPurchases.forEach(p => { %>
-    <tr>
-      <td><%= p.product_name %></td>
-      <td class="mono"><%= p.discord_id %></td>
-      <td><%= won(p.price) %></td>
-      <td class="muted"><%= new Date(p.created_at).toLocaleString('ko-KR') %></td>
-    </tr>
-    <% }) %>
-  </table>
-  <% } %>
-</div>
+<script>
+  (function(){
+    var data = { 7: <%- JSON.stringify(dash.daily7) %>, 30: <%- JSON.stringify(dash.daily30) %> };
+    var svg = document.getElementById('revChart');
+    var labelsEl = document.getElementById('revLabels');
+    var W = 720, H = 210, pad = 8;
+    var DOW = ['일','월','화','수','목','금','토'];
+    function nf(n){ return '₩' + Number(n).toLocaleString('ko-KR'); }
+
+    function draw(range){
+      var arr = data[range];
+      var vals = arr.map(function(p){ return p.revenue; });
+      var max = Math.max.apply(null, vals.concat([1]));
+      max = Math.ceil(max / 100000) * 100000 || 100000;
+      var n = arr.length;
+      var stepX = (W) / (n - 1 || 1);
+      function x(i){ return i * stepX; }
+      function y(v){ return H - pad - (v / max) * (H - pad*2); }
+
+      var line = '', area = '';
+      arr.forEach(function(p, i){
+        var px = x(i).toFixed(1), py = y(p.revenue).toFixed(1);
+        line += (i===0?'M':'L') + px + ' ' + py + ' ';
+      });
+      area = line + 'L' + x(n-1).toFixed(1) + ' ' + H + ' L0 ' + H + ' Z';
+
+      var grid = '';
+      for (var g=0; g<=3; g++){
+        var gy = (pad + (H - pad*2) * g/3).toFixed(1);
+        grid += '<line x1="0" y1="'+gy+'" x2="'+W+'" y2="'+gy+'" stroke="var(--line-soft)" stroke-width="1"/>';
+      }
+      var dots = arr.map(function(p,i){ return '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.revenue).toFixed(1)+'" r="'+(range==7?3.5:0)+'" fill="var(--green)"/>'; }).join('');
+
+      svg.innerHTML =
+        '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0" stop-color="var(--green)" stop-opacity="0.35"/>'+
+        '<stop offset="1" stop-color="var(--green)" stop-opacity="0"/></linearGradient></defs>'+
+        grid +
+        '<path d="'+area+'" fill="url(#rg)"/>'+
+        '<path d="'+line+'" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+        dots;
+
+      // labels
+      if (range == 7){
+        labelsEl.style.display = 'flex';
+        labelsEl.innerHTML = arr.map(function(p){ var wd = DOW[new Date(p.date).getDay()]; return '<span class="chart-axis">'+wd+'</span>'; }).join('');
+      } else {
+        labelsEl.style.display = 'flex';
+        var first = new Date(arr[0].date), last = new Date(arr[arr.length-1].date);
+        var fmt = function(dt){ return (dt.getMonth()+1)+'/'+dt.getDate(); };
+        labelsEl.innerHTML = '<span class="chart-axis">'+fmt(first)+'</span><span class="chart-axis">'+fmt(last)+'</span>';
+      }
+    }
+    draw(7);
+    document.querySelectorAll('#revSeg button').forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll('#revSeg button').forEach(function(x){ x.classList.remove('active'); });
+        b.classList.add('active');
+        draw(b.getAttribute('data-range'));
+      });
+    });
+  })();
+</script>
+
 <%- include('partials/footer') %>

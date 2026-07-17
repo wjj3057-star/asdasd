@@ -1,28 +1,39 @@
-<%- include('partials/header') %>
-<h1>👥 유저</h1>
-<p class="sub">유저 잔액을 확인하고 수동으로 지급/차감합니다.</p>
+<%- include('partials/header', { title: '고객 관리' }) %>
 
-<div class="card">
-  <% if (!users.length) { %><p class="muted">유저가 없습니다.</p><% } else { %>
-  <table>
-    <tr><th>유저</th><th>잔액</th><th>입금자명</th><th>누적충전</th><th>누적사용</th><th>잔액조정</th></tr>
-    <% users.forEach(u => { %>
-    <tr>
-      <td class="mono"><%= u.username %><br/><span class="muted"><%= u.discord_id %></span></td>
-      <td><b><%= won(u.balance) %></b></td>
-      <td><%= u.deposit_name || '-' %></td>
-      <td class="muted"><%= won(u.total_charged) %></td>
-      <td class="muted"><%= won(u.total_spent) %></td>
-      <td>
-        <form method="post" action="/users/<%= u.discord_id %>/adjust" class="row" style="gap:6px">
-          <input type="number" name="amount" placeholder="+/- 금액" style="min-width:100px" required />
-          <input type="text" name="memo" placeholder="메모" style="min-width:100px" />
-          <button class="btn sm">적용</button>
-        </form>
-      </td>
-    </tr>
-    <% }) %>
-  </table>
-  <% } %>
+<div class="section-label">
+  <span class="eyebrow">CUSTOMERS</span>
+  <h2 class="section-title">고객 및 잔액</h2>
+  <p class="section-desc">Discord 사용자별 잔액, 구매 횟수와 고정 입금자명을 확인합니다.</p>
 </div>
+
+<div class="stack">
+  <% users.forEach(u => { %>
+  <div class="card">
+    <div class="item-head" style="align-items:center">
+      <div class="ini" style="width:52px;height:52px;border-radius:16px;font-size:20px"><%= String(u.username || u.discord_id).slice(0,1) %></div>
+      <div style="flex:1">
+        <div class="name" style="font-size:20px"><%= u.username || u.discord_id %></div>
+        <div class="desc" style="color:var(--muted)">구매 <%= u.purchaseCount %>회 · <%= u.deposit_name ? '입금자명 ' + u.deposit_name : '정상 회원' %></div>
+      </div>
+    </div>
+    <div class="price" style="margin-top:16px"><%= won(u.balance) %></div>
+
+    <details class="editor" style="margin-top:10px">
+      <summary><span class="btn ghost">잔액 조정</span></summary>
+      <form method="post" action="/users/<%= u.discord_id %>/adjust" style="margin-top:12px">
+        <div class="form-row">
+          <input type="number" name="amount" placeholder="+ 충전 / - 차감 금액" required />
+          <input type="text" name="memo" placeholder="메모 (예: 이벤트 지급)" />
+        </div>
+        <div style="margin-top:12px"><button class="btn green sm">적용</button></div>
+      </form>
+      <div class="muted" style="font-size:13px; margin-top:10px">
+        누적 충전 <%= won(u.total_charged) %> · 누적 사용 <%= won(u.total_spent) %>
+      </div>
+    </details>
+  </div>
+  <% }) %>
+  <% if (!users.length) { %><p class="muted">아직 고객이 없습니다.</p><% } %>
+</div>
+
 <%- include('partials/footer') %>

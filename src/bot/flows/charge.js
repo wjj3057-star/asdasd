@@ -5,12 +5,13 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
 const IDS = require('../ids');
-const { getAllSettings, Users, Charges } = require('../../database/models');
+const { getAllSettings, Users, Charges, Coins } = require('../../database/models');
 const { won, makeUniqueAmount, sanitizeName, parseAmount } = require('../../util');
 
 // 충전 방식 선택 (계좌충전 / 코인충전)
@@ -124,13 +125,68 @@ async function submitAccountCharge(interaction) {
   return interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-// 코인충전: 금액 입력 모달
+// 코인 로고 이모지
+const COIN_EMOJI = { USDT: '💵', SOL: '🅢', LTC: 'Ł', BTC: '₿', ETH: 'Ξ' };
+function coinEmoji(symbol) {
+  return COIN_EMOJI[String(symbol).toUpperCase()] || '🪙';
+}
+function coinLabel(c) {
+  return `${c.symbol} (${c.network})`;
+}
+
+// 코인충전 1단계: 코인 종류 선택
 async function openCoinModal(interaction) {
-  const s = getAllSettings();
-  if (!s.coin_wallet) {
-    return interaction.reply({ content: '⚠️ 관리자가 아직 코인 지갑을 설정하지 않았습니다.', ephemeral: true });
+  const coins = Coins.enabled();
+  if (!coins.length) {
+    return interaction.reply({
+      content: '⚠️ 현재 이용 가능한 코인이 없습니다. (관리자가 지갑 주소를 설정해야 합니다.)',
+      ephemeral: true,
+    });
   }
-  const modal = new ModalBuilder().setCustomId(IDS.CHARGE_COIN_MODAL).setTitle('코인충전 신청');
+
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle('🪙 코인충전 - 코인 선택')
+    .setDescription('충전에 사용할 코인을 선택해 주세요.')
+    .addFields(
+      coins.map((c) => ({
+        name: `${coinEmoji(c.symbol)} ${coinLabel(c)}`,
+        value: `1 ${c.symbol} ≈ ${won(c.krw_rate)}`,
+        inline: true,
+      }))
+    );
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(IDS.SELECT_COIN)
+    .setPlaceholder('코인 선택')
+    .addOptions(
+      coins.slice(0, 25).map((c) => ({
+        label: coinLabel(c).slice(0, 100),
+        description: `1 ${c.symbol} ≈ ${won(c.krw_rate)}`.slice(0, 100),
+        value: String(c.id),
+        emoji: /^[A-Za-z0-9]$/.test(coinEmoji(c.symbol)) ? undefined : coinEmoji(c.symbol),
+      }))
+    );
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(menu)],
+    ephemeral: true,
+  });
+}
+
+// 코인충전 2단계: 코인 선택됨 → 금액 입력 모달
+async function onCoinSelected(interaction) {
+  const s = getAllSettings();
+  const coinId = parseInt(interaction.values[0], 10);
+  const coin = Coins.get(coinId);
+  if (!coin || !coin.enabled || !coin.wallet) {
+    return interaction.reply({ content: '⚠️ 선택한 코인을 사용할 수 없습니다.', ephemeral: true });
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`${IDS.CHARGE_COIN_MODAL}:${coinId}`)
+    .setTitle(`코인충전 · ${coinLabel(coin)}`);
   const amount = new TextInputBuilder()
     .setCustomId('amount')
     .setLabel(`충전 금액 (원) · 최소 ${Number(s.charge_min).toLocaleString()}원`)
@@ -141,9 +197,15 @@ async function openCoinModal(interaction) {
   return interaction.showModal(modal);
 }
 
-async function submitCoinCharge(interaction) {
+// 코인충전 3단계: 금액 제출 → 요청 생성
+async function submitCoinCharge(interaction, coinId) {
   const s = getAllSettings();
   Users.ensure(interaction.user.id, interaction.user.username);
+
+  const coin = Coins.get(coinId);
+  if (!coin || !coin.wallet) {
+    return interaction.reply({ content: '⚠️ 선택한 코인을 사용할 수 없습니다.', ephemeral: true });
+  }
 
   const amount = parseAmount(interaction.fields.getTextInputValue('amount'));
   const min = parseInt(s.charge_min || '1000', 10);
@@ -151,16 +213,18 @@ async function submitCoinCharge(interaction) {
     return interaction.reply({ content: `⚠️ 최소 충전 금액은 ${won(min)} 입니다.`, ephemeral: true });
   }
 
-  const rate = parseFloat(s.coin_krw_rate || '1400') || 1400;
+  const rate = Number(coin.krw_rate) || 1;
+  const decimals = Math.min(Math.max(parseInt(coin.decimals, 10) || 6, 4), 8); // 표시용 4~8자리
   const baseCoin = amount / rate;
-  // 고유 코인 수량 생성 (소수 6자리 랜덤 꼬리)
+  // 고유 코인 수량 생성 (마지막 자리 랜덤 꼬리로 동시요청 구분)
   const existing = Charges.pendingByUser(interaction.user.id)
-    .filter((c) => c.method === 'coin')
+    .filter((c) => c.method === 'coin' && c.coin_symbol === coin.symbol && c.coin_network === coin.network)
     .map((c) => c.coin_amount);
+  const tailUnit = Math.pow(10, decimals);
   let coinAmountStr;
-  for (let i = 0; i < 50; i++) {
-    const tail = (Math.floor(Math.random() * 9000) + 1000) / 1e6; // 0.001000~0.009999
-    coinAmountStr = (baseCoin + tail).toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  for (let i = 0; i < 80; i++) {
+    const tail = (Math.floor(Math.random() * 8999) + 1000) / tailUnit; // 소수부 랜덤
+    coinAmountStr = (baseCoin + tail).toFixed(decimals).replace(/0+$/, '').replace(/\.$/, '');
     if (!existing.includes(coinAmountStr)) break;
   }
 
@@ -169,23 +233,28 @@ async function submitCoinCharge(interaction) {
     method: 'coin',
     amount,
     expected_amount: amount,
-    coin_symbol: s.coin_symbol,
+    coin_symbol: coin.symbol,
+    coin_network: coin.network,
     coin_amount: coinAmountStr,
-    address: s.coin_wallet,
+    address: coin.wallet,
   });
 
   const expireMin = parseInt(s.charge_expire_minutes || '30', 10);
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
     .setTitle('🪙 코인충전 신청 완료')
-    .setDescription('아래 지갑으로 **정확한 수량**을 전송해 주세요.\n입금이 확인되면 잔액이 **자동으로 충전**됩니다.')
-    .addFields(
-      { name: '코인 / 네트워크', value: `${s.coin_symbol} (${s.coin_network})`, inline: true },
-      { name: '충전 잔액', value: won(amount), inline: true },
-      { name: '전송 수량', value: `**${coinAmountStr} ${s.coin_symbol}**`, inline: false },
-      { name: '지갑 주소', value: `\`${s.coin_wallet}\`` }
+    .setDescription(
+      `아래 **${coin.network}** 네트워크 지갑으로 **정확한 수량**을 전송해 주세요.\n입금이 확인되면 잔액이 **자동으로 충전**됩니다.`
     )
-    .setFooter({ text: `요청번호 #${charge.id} · ${expireMin}분 내 미입금 시 자동 취소 · 적용환율 1${s.coin_symbol}≈${won(rate)}` })
+    .addFields(
+      { name: '코인 / 네트워크', value: `${coin.symbol} (${coin.network})`, inline: true },
+      { name: '충전 잔액', value: won(amount), inline: true },
+      { name: '전송 수량', value: `**${coinAmountStr} ${coin.symbol}**`, inline: false },
+      { name: '지갑 주소', value: `\`${coin.wallet}\`` }
+    )
+    .setFooter({
+      text: `요청번호 #${charge.id} · ${expireMin}분 내 미입금 시 자동 취소 · 적용환율 1${coin.symbol}≈${won(rate)}`,
+    })
     .setTimestamp();
 
   return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -196,5 +265,6 @@ module.exports = {
   openAccountModal,
   submitAccountCharge,
   openCoinModal,
+  onCoinSelected,
   submitCoinCharge,
 };

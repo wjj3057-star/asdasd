@@ -2,28 +2,63 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title><%= settings.shop_name %> · 관리자</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0f0c" />
+  <title><%= (typeof title !== 'undefined' ? title : '관리자') %> · <%= settings.shop_name %></title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">🏪 <span><%= settings.shop_name %></span></div>
-    <nav class="nav">
-      <a href="/" class="<%= active==='dashboard'?'active':'' %>">📊 대시보드</a>
-      <a href="/settings" class="<%= active==='settings'?'active':'' %>">🏪 상점/임베드 설정</a>
-      <a href="/categories" class="<%= active==='categories'?'active':'' %>">🗂️ 카테고리</a>
-      <a href="/products" class="<%= active==='products'?'active':'' %>">📦 제품/재고</a>
-      <a href="/charges" class="<%= active==='charges'?'active':'' %>">💳 충전 요청</a>
-      <a href="/users" class="<%= active==='users'?'active':'' %>">👥 유저</a>
-    </nav>
-    <% if (typeof user !== 'undefined' && user) { %>
-    <div class="me">
-      <% if (user.avatar) { %><img src="<%= user.avatar %>" alt="" /><% } %>
-      <%= user.username %><br />
-      <a href="/logout">로그아웃</a>
-    </div>
+<%
+  const nav = [
+    { href: '/',           key: 'dashboard',  icon: 'grid' },
+    { href: '/products',   key: 'products',   icon: 'cube' },
+    { href: '/categories', key: 'categories', icon: 'tree' },
+    { href: '/inventory',  key: 'inventory',  icon: 'box' },
+    { href: '/orders',     key: 'orders',     icon: 'list' },
+    { href: '/charges',    key: 'charges',    icon: 'coin' },
+    { href: '/users',      key: 'users',      icon: 'people' },
+    { href: '/settings',   key: 'settings',   icon: 'bot' },
+  ];
+  function icon(name){
+    const p = {
+      grid:  '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+      cube:  '<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>',
+      tree:  '<rect x="4" y="3" width="6" height="6" rx="1.5"/><rect x="14" y="15" width="6" height="6" rx="1.5"/><rect x="4" y="15" width="6" height="6" rx="1.5"/><path d="M7 9v3M7 15v-3h10v3"/>',
+      box:   '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+      list:  '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+      coin:  '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.1 1.1-1.5 2.5-1.5s2.5.5 2.5 1.6c0 1-.8 1.4-2.5 1.9s-2.5.9-2.5 2 1.1 1.5 2.5 1.5 2.5-.5 2.5-1.5"/>',
+      people:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.4-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2A3 3 0 0 1 16 11M20.5 20c0-2.4-1.4-4.2-3.5-4.8"/>',
+      bot:   '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M8.5 13h.01M15.5 13h.01M9 17h6"/>',
+    };
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ (p[name]||'') +'</svg>';
+  }
+%>
+<header class="topbar">
+  <nav class="topnav">
+    <a href="/" class="brand">M</a>
+    <% nav.forEach(function(n){ %>
+      <a href="<%= n.href %>" class="tab <%= active===n.key ? 'active' : '' %>" title="<%= n.key %>"><%- icon(n.icon) %></a>
+    <% }) %>
+    <span class="spacer"></span>
+    <% if (typeof user !== 'undefined' && user && user.avatar) { %>
+      <a href="/logout"><img class="avatar" src="<%= user.avatar %>" alt="logout" /></a>
+    <% } else { %>
+      <a href="/logout" class="tab" title="logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg></a>
     <% } %>
-  </aside>
-  <main class="main">
+  </nav>
+</header>
+
+<main class="page">
+  <div class="header-row">
+    <span class="eyebrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.8L20 9l-5 3.2L16.5 19 12 15.4 7.5 19 9 12.2 4 9l6.1-1.2z"/></svg> STORE OPERATION</span>
+    <span class="badge-saved"><span class="dot"></span> 저장 연결됨</span>
+  </div>
+  <h1 class="page-title"><%= title %></h1>
+  <p class="page-date"><%= new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' }) %></p>
+
+  <form method="post" action="/panel/refresh">
+    <button type="submit" class="sync-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+      상점 메시지 동기화
+    </button>
+  </form>

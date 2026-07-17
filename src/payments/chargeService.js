@@ -91,14 +91,17 @@ function handleBankNotification(payload) {
 }
 
 /**
- * 코인 입금 알림 처리. payload: { amount, symbol, txid }
- * 고유 코인수량으로 대기중인 코인 충전요청을 매칭.
+ * 코인 입금 알림 처리. payload: { amount, symbol, network, txid }
+ * 고유 코인수량(+심볼/네트워크)으로 대기중인 코인 충전요청을 매칭.
  */
 function handleCoinNotification(payload) {
   const amountStr = String(payload.amount);
-  const match = Charges.findPendingCoinMatch(amountStr);
+  const match = Charges.findPendingCoinMatch(amountStr, payload.symbol, payload.network);
   if (!match) return { ok: false, matched: false, reason: 'NO_MATCH' };
-  const res = approveCharge(match.id, `코인 자동확인 · ${payload.txid || ''}`);
+  const res = approveCharge(
+    match.id,
+    `${match.coin_symbol}(${match.coin_network}) 자동확인 · ${payload.txid || ''}`
+  );
   return { ok: res.ok, matched: true, charge: match, balance: res.balance };
 }
 

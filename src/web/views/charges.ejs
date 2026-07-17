@@ -1,54 +1,115 @@
-<%- include('partials/header') %>
-<h1>💳 충전 요청</h1>
-<p class="sub">계좌/코인 충전 요청을 확인하고 자동매칭 실패 시 수동으로 승인/반려합니다.</p>
+<%- include('partials/header', { title: '충전 관리' }) %>
 
-<div class="card">
-  <table>
-    <tr><th>#</th><th>유저</th><th>방식</th><th>입금정보</th><th>충전액</th><th>상태</th><th>시각</th><th>관리</th></tr>
-    <% charges.forEach(c => { %>
-    <tr>
-      <td>#<%= c.id %></td>
-      <td class="mono"><%= c.userObj ? c.userObj.username : '' %><br/><span class="muted"><%= c.discord_id %></span></td>
-      <td><%= c.method==='coin'?'🪙 코인':'🏦 계좌' %></td>
-      <td class="mono">
-        <% if (c.method==='coin') { %><%= c.coin_amount %> <%= c.coin_symbol %>
-        <% } else { %><%= c.depositor_name %> / <%= won(c.expected_amount) %><% } %>
-      </td>
-      <td><%= won(c.amount) %></td>
-      <td>
-        <% if (c.status==='pending') { %><span class="tag yellow">대기</span>
-        <% } else if (c.status==='approved') { %><span class="tag green">승인</span>
-        <% } else if (c.status==='rejected') { %><span class="tag red">반려</span>
-        <% } else { %><span class="tag gray">만료</span><% } %>
-      </td>
-      <td class="muted"><%= new Date(c.created_at).toLocaleString('ko-KR') %></td>
-      <td>
-        <% if (c.status==='pending') { %>
-        <form method="post" action="/charges/<%= c.id %>/approve" class="inline"><button class="btn green sm">승인</button></form>
-        <form method="post" action="/charges/<%= c.id %>/reject" class="inline"><button class="btn red sm">반려</button></form>
-        <% } %>
-      </td>
-    </tr>
-    <% }) %>
-  </table>
+<div class="section-label">
+  <span class="eyebrow">PAYMENTS</span>
+  <h2 class="section-title">자동 잔액 충전</h2>
+  <p class="section-desc">계좌 입금 대조와 코인 결제 확정을 자동으로 잔액에 반영합니다.</p>
 </div>
 
-<h2>📩 최근 입금 알림 수신 로그</h2>
+<!-- 계좌 자동 충전 -->
 <div class="card">
-  <p class="muted" style="font-size:12px">포워딩 앱에서 <span class="mono">/api/webhook/bank</span> 로 전송된 입금 알림 기록입니다.</p>
-  <% if (!notifications.length) { %><p class="muted">수신된 알림이 없습니다.</p><% } else { %>
-  <table>
-    <tr><th>입금자</th><th>금액</th><th>매칭</th><th>원문</th><th>시각</th></tr>
-    <% notifications.forEach(n => { %>
-    <tr>
-      <td><%= n.depositor %></td>
-      <td><%= n.amount!=null ? won(n.amount) : '-' %></td>
-      <td><%= n.matched ? '<span class="tag green">성공 #'+n.charge_id+'</span>' : '<span class="tag gray">미매칭</span>' %></td>
-      <td class="muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= n.raw %></td>
-      <td class="muted"><%= new Date(n.created_at).toLocaleString('ko-KR') %></td>
-    </tr>
-    <% }) %>
-  </table>
-  <% } %>
+  <div class="item-head" style="align-items:center">
+    <div class="tile green-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9M3 20h18"/></svg></div>
+    <div style="flex:1">
+      <div class="name" style="font-size:20px">계좌 자동 충전</div>
+      <div class="desc" style="color:var(--muted)">입금 알림 포워딩 · PG 미사용</div>
+    </div>
+    <span class="pill <%= settings.bank_account ? 'on' : 'off' %>"><span class="dot"></span> <%= settings.bank_account ? '사용 중' : '미설정' %></span>
+  </div>
+  <div style="margin-top:16px">
+    <div class="kv"><span class="k">입금 계좌</span><span class="v"><%= settings.bank_name || '-' %> <%= settings.bank_account || '' %></span></div>
+    <div class="kv"><span class="k">예금주</span><span class="v"><%= settings.bank_holder || '-' %></span></div>
+    <div class="kv"><span class="k">대조 방식</span><span class="v">입금자명 + 고유 금액</span></div>
+  </div>
+  <div class="flow-chips">충전 요청 <span class="arrow">→</span> 입금 알림 <span class="arrow">→</span> 자동 대조 <span class="arrow">→</span> 잔액 반영</div>
 </div>
+
+<!-- 코인 자동 충전 -->
+<div class="card">
+  <div class="item-head" style="align-items:center">
+    <div class="tile green-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.1 1.1-1.5 2.5-1.5s2.5.5 2.5 1.6c0 1-.8 1.4-2.5 1.9s-2.5.9-2.5 2 1.1 1.5 2.5 1.5 2.5-.5 2.5-1.5"/></svg></div>
+    <div style="flex:1">
+      <div class="name" style="font-size:20px">코인 자동 충전</div>
+      <div class="desc" style="color:var(--muted)">지갑 폴링 · 결제 확정 웹훅</div>
+    </div>
+    <span class="pill <%= coins.some(c=>c.enabled&&c.wallet) ? 'on' : 'off' %>"><span class="dot"></span> <%= coins.some(c=>c.enabled&&c.wallet) ? '사용 중' : '미설정' %></span>
+  </div>
+  <div style="margin-top:16px">
+    <% coins.forEach(function(c){ %>
+      <div class="kv"><span class="k"><%= c.symbol %> · <%= c.network %></span><span class="v"><%- !c.wallet ? '<span class="tag gray">지갑 미설정</span>' : (c.enabled ? '<span class="tag green">사용</span>' : '<span class="tag gray">중지</span>') %> · 1≈<%= won(c.krw_rate) %></span></div>
+    <% }) %>
+    <% if (!coins.length) { %><p class="muted">등록된 코인이 없습니다. <a href="/settings">설정</a>에서 추가하세요.</p><% } %>
+  </div>
+  <div class="flow-chips">충전 요청 <span class="arrow">→</span> 코인 전송 <span class="arrow">→</span> 수량 대조 <span class="arrow">→</span> 잔액 반영</div>
+</div>
+
+<!-- 충전 요청 -->
+<div class="section-label" style="margin-top:28px">
+  <div class="between">
+    <h2 class="section-title" style="font-size:24px; margin:0">충전 요청</h2>
+    <% if (pendingCount) { %><span class="tag gold"><%= pendingCount %>건 대기</span><% } %>
+  </div>
+</div>
+
+<div class="card">
+  <div class="scroll-x">
+    <table class="tbl">
+      <thead><tr><th>번호</th><th>고객</th><th>방식</th><th>입금정보</th><th>충전액</th><th>상태</th><th></th></tr></thead>
+      <tbody>
+      <% charges.forEach(function(c){
+           const uname = c.userObj ? c.userObj.username : c.discord_id;
+      %>
+        <tr>
+          <td class="mono">DEP-<%= String(c.id).padStart(3,'0') %></td>
+          <td><div class="cust"><span class="ini"><%= String(uname||'?').slice(0,1) %></span><span><%= uname %></span></div></td>
+          <td><%= c.method==='coin' ? '🪙 코인' : '🏦 계좌' %></td>
+          <td class="mono"><% if (c.method==='coin') { %><%= c.coin_amount %> <%= c.coin_symbol %><% } else { %><%= c.depositor_name %> / <%= won(c.expected_amount) %><% } %></td>
+          <td style="font-weight:700"><%= won(c.amount) %></td>
+          <td>
+            <% if (c.status==='pending') { %><span class="tag gold">대기</span>
+            <% } else if (c.status==='approved') { %><span class="tag green">승인</span>
+            <% } else if (c.status==='rejected') { %><span class="tag red">반려</span>
+            <% } else { %><span class="tag gray">만료</span><% } %>
+          </td>
+          <td>
+            <% if (c.status==='pending') { %>
+            <div class="btn-row" style="flex-wrap:nowrap">
+              <form method="post" action="/charges/<%= c.id %>/approve" style="display:inline"><button class="btn green sm">승인</button></form>
+              <form method="post" action="/charges/<%= c.id %>/reject" style="display:inline"><button class="btn red sm">반려</button></form>
+            </div>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!charges.length) { %><tr><td colspan="7" class="muted">충전 요청이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 입금 알림 로그 -->
+<div class="section-label" style="margin-top:28px">
+  <h2 class="section-title" style="font-size:24px; margin:0">입금 알림 수신 로그</h2>
+  <p class="section-desc" style="margin-top:8px">포워딩 앱에서 <span class="mono">/api/webhook/bank</span> 로 전송된 입금 알림 기록입니다.</p>
+</div>
+<div class="card">
+  <div class="scroll-x">
+    <table class="tbl">
+      <thead><tr><th>입금자</th><th>금액</th><th>매칭</th><th>원문</th><th>시각</th></tr></thead>
+      <tbody>
+      <% notifications.forEach(function(n){ %>
+        <tr>
+          <td><%= n.depositor || '-' %></td>
+          <td><%= n.amount!=null ? won(n.amount) : '-' %></td>
+          <td><%- n.matched ? '<span class="tag green">성공 #'+n.charge_id+'</span>' : '<span class="tag gray">미매칭</span>' %></td>
+          <td class="muted mono" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= n.raw %></td>
+          <td class="muted"><%= new Date(n.created_at).toLocaleString('ko-KR') %></td>
+        </tr>
+      <% }) %>
+      <% if (!notifications.length) { %><tr><td colspan="5" class="muted">수신된 알림이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <%- include('partials/footer') %>

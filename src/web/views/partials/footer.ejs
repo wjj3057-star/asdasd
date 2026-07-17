@@ -1,4 +1,11 @@
-  </main>
-</div>
+  <% if (typeof syncMsg !== 'undefined' && syncMsg) { %>
+  <script>
+    (function(){
+      var f = document.querySelector('form[action="/panel/refresh"]');
+      // no-op placeholder for future toast handling
+    })();
+  </script>
+  <% } %>
+</main>
 </body>
 </html>

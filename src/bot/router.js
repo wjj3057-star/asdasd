@@ -45,6 +45,7 @@ async function handleButton(interaction) {
 
 async function handleSelect(interaction) {
   const id = interaction.customId;
+  if (id === IDS.SELECT_COIN) return charge.onCoinSelected(interaction);
   if (id === IDS.SELECT_CATEGORY) return buy.onCategorySelected(interaction);
   if (id.startsWith(IDS.SELECT_PRODUCT)) return buy.onProductSelected(interaction);
 }
@@ -52,7 +53,11 @@ async function handleSelect(interaction) {
 async function handleModal(interaction) {
   const id = interaction.customId;
   if (id === IDS.CHARGE_ACCOUNT_MODAL) return charge.submitAccountCharge(interaction);
-  if (id === IDS.CHARGE_COIN_MODAL) return charge.submitCoinCharge(interaction);
+  // vm:charge:coin:modal:<coinId>
+  if (id.startsWith(IDS.CHARGE_COIN_MODAL + ':')) {
+    const coinId = parseInt(id.split(':').pop(), 10);
+    return charge.submitCoinCharge(interaction, coinId);
+  }
   // vm:buy:confirm:modal:<productId>
   if (id.startsWith(IDS.BUY_CONFIRM + ':modal:')) {
     const productId = parseInt(id.split(':').pop(), 10);

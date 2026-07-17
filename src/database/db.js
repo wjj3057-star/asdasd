@@ -113,6 +113,28 @@ CREATE TABLE IF NOT EXISTS bank_notifications (
   charge_id   INTEGER,
   created_at  INTEGER NOT NULL
 );
+
+-- 코인충전 지원 코인 목록 (LTC, SOL, USDT-TRC20, USDT-BSC 등)
+CREATE TABLE IF NOT EXISTS coins (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  symbol     TEXT NOT NULL,       -- LTC, SOL, USDT ...
+  network    TEXT NOT NULL,       -- Litecoin, Solana, TRC20, BEP20 ...
+  wallet     TEXT DEFAULT '',
+  krw_rate   REAL NOT NULL DEFAULT 0, -- 1코인 = ?원
+  decimals   INTEGER DEFAULT 6,
+  enabled    INTEGER DEFAULT 1,
+  position   INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
 `);
+
+// ---- 간단 마이그레이션: 누락 컬럼 추가 ----
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+ensureColumn('charge_requests', 'coin_network', "coin_network TEXT DEFAULT ''");
 
 module.exports = db;

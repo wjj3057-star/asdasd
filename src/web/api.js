@@ -49,13 +49,13 @@ router.post('/webhook/bank', checkSecret, (req, res) => {
 });
 
 /**
- * 코인 입금 알림 수신 (웹훅 방식)
- * { amount: "7.145321", symbol: "USDT", txid: "..." }
+ * 코인 입금 알림 수신 (웹훅 방식) — LTC / SOL / USDT(TRC20·BSC) 등 공통
+ * { amount: "7.145321", symbol: "USDT", network: "BEP20", txid: "..." }
  */
 router.post('/webhook/coin', checkSecret, (req, res) => {
-  const { amount, symbol, txid } = req.body;
+  const { amount, symbol, network, txid } = req.body;
   if (amount == null) return res.status(400).json({ ok: false, error: 'amount required' });
-  const result = handleCoinNotification({ amount, symbol, txid });
+  const result = handleCoinNotification({ amount, symbol, network, txid });
   return res.json(result);
 });
 
