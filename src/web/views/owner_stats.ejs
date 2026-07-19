@@ -1,0 +1,164 @@
+<%- include('partials/header', { title: '통합 통계' }) %>
+
+<%
+  function money(n){ return '₩' + Number(n||0).toLocaleString('ko-KR'); }
+  const t = ov.totals;
+%>
+
+<div class="section-label">
+  <span class="eyebrow">OWNER · ANALYTICS</span>
+  <h2 class="section-title">전체 서버 통합 통계</h2>
+  <p class="section-desc">봇이 운영되는 모든 서버의 매출·구독·운영 현황을 한눈에 봅니다.</p>
+</div>
+
+<div class="stack" style="margin-top:8px">
+  <div class="card stat">
+    <div class="tile green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg></div>
+    <div>
+      <div class="label">전체 누적 매출</div>
+      <div class="value"><%= money(t.revenue) %></div>
+      <div class="sub up">오늘 <%= money(t.todayRevenue) %> · 주문 <%= t.orders %>건</div>
+    </div>
+  </div>
+  <div class="card stat">
+    <div class="tile gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg></div>
+    <div>
+      <div class="label">라이선스 판매 수익 (추정)</div>
+      <div class="value" style="color:var(--gold)"><%= money(ov.licenses.revenue) %></div>
+      <div class="sub warn">
+        <% Object.keys(ov.licenses.planSales).forEach(function(p, i){ %><%= i ? ' · ' : '' %><%= plans[p] ? plans[p].label : p %> <%= ov.licenses.planSales[p] %>개<% }) %>
+        <%= Object.keys(ov.licenses.planSales).length ? '' : '판매 내역 없음' %> · 미사용 키 <%= ov.licenses.unused %>개
+      </div>
+    </div>
+  </div>
+  <div class="card stat">
+    <div class="tile blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 12 3 4 7v10l8 4 8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></div>
+    <div>
+      <div class="label">구독 서버</div>
+      <div class="value" style="color:var(--blue)"><%= t.activeCount %> / <%= t.guildCount %></div>
+      <div class="sub info">유저 <%= t.users %>명 · 예치 잔액 <%= money(t.balance) %></div>
+    </div>
+  </div>
+  <div class="card stat">
+    <div class="tile green-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+    <div>
+      <div class="label">전체 처리 대기</div>
+      <div class="value" style="color:var(--green)"><%= t.pendingCharges + t.pendingDeliveries %>건</div>
+      <div class="sub flat">충전 <%= t.pendingCharges %> · 게임배송 <%= t.pendingDeliveries %></div>
+    </div>
+  </div>
+</div>
+
+<!-- 전 서버 합산 매출 차트 -->
+<div class="card" style="margin-top:16px">
+  <div class="chart-head">
+    <div>
+      <span class="eyebrow">ALL SERVERS REVENUE</span>
+      <h2 class="section-title" style="font-size:22px; margin:8px 0 0">합산 매출 추이</h2>
+    </div>
+    <div class="seg" id="revSeg">
+      <button class="active" data-range="7">7일</button>
+      <button data-range="30">30일</button>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <svg class="chart-svg" id="revChart" viewBox="0 0 720 210" preserveAspectRatio="none"></svg>
+    <div id="revLabels" class="between" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- 서버별 현황 -->
+<div class="section-label" style="margin-top:28px">
+  <h2 class="section-title" style="font-size:24px; margin:0">서버별 현황</h2>
+  <p class="section-desc" style="margin-top:8px">매출순 정렬 · 서버를 선택해 개별 대시보드로 이동할 수 있습니다.</p>
+</div>
+
+<div class="stack">
+  <% ov.guilds.forEach(function(g){ %>
+  <div class="card">
+    <div class="item-head" style="align-items:center">
+      <div class="ini" style="width:48px;height:48px;border-radius:14px;font-size:18px"><%= String(g.name||'?').slice(0,1) %></div>
+      <div style="flex:1; min-width:0">
+        <div class="name" style="font-size:19px"><%= g.name || g.guild_id %></div>
+        <div class="desc" style="color:var(--muted)">
+          <% if (g.active) { %><%= plans[g.plan] ? plans[g.plan].label : (g.plan || '-') %> · <%= g.daysLeft %>일 남음
+          <% } else if (g.expires_at) { %>구독 만료됨
+          <% } else { %>미구독<% } %>
+          · 유저 <%= g.users %>명
+        </div>
+      </div>
+      <span class="pill <%= g.active ? 'on' : (g.daysLeft === 0 && g.expires_at ? 'warn' : 'off') %>"><span class="dot"></span> <%= g.active ? '구독중' : '비활성' %></span>
+    </div>
+    <hr class="hr" />
+    <div class="grid cols-2" style="gap:8px">
+      <div class="kv" style="border:none;padding:5px 0"><span class="k">누적 매출</span><span class="v"><%= money(g.revenue) %></span></div>
+      <div class="kv" style="border:none;padding:5px 0"><span class="k">오늘 매출</span><span class="v"><%= money(g.todayRevenue) %></span></div>
+      <div class="kv" style="border:none;padding:5px 0"><span class="k">주문 / 재고</span><span class="v"><%= g.orders %>건 · <%= g.stock %>개</span></div>
+      <div class="kv" style="border:none;padding:5px 0"><span class="k">예치 잔액</span><span class="v"><%= money(g.balance) %></span></div>
+    </div>
+    <% if (g.pendingCharges + g.pendingDeliveries > 0) { %>
+      <div style="margin-top:10px"><span class="tag gold">처리 대기 <%= g.pendingCharges + g.pendingDeliveries %>건</span></div>
+    <% } %>
+    <div style="margin-top:14px">
+      <a class="btn ghost" href="/select-guild/<%= g.guild_id %>">이 서버 대시보드 열기 →</a>
+    </div>
+  </div>
+  <% }) %>
+  <% if (!ov.guilds.length) { %><p class="muted">아직 등록된 서버가 없습니다.</p><% } %>
+</div>
+
+<script>
+  (function(){
+    var data = { 7: <%- JSON.stringify(ov.daily7) %>, 30: <%- JSON.stringify(ov.daily30) %> };
+    var svg = document.getElementById('revChart');
+    var labelsEl = document.getElementById('revLabels');
+    var W = 720, H = 210, pad = 8;
+    var DOW = ['일','월','화','수','목','금','토'];
+
+    function draw(range){
+      var arr = data[range];
+      var vals = arr.map(function(p){ return p.revenue; });
+      var max = Math.max.apply(null, vals.concat([1]));
+      max = Math.ceil(max / 100000) * 100000 || 100000;
+      var n = arr.length;
+      var stepX = W / (n - 1 || 1);
+      function x(i){ return i * stepX; }
+      function y(v){ return H - pad - (v / max) * (H - pad*2); }
+
+      var line = '';
+      arr.forEach(function(p, i){ line += (i===0?'M':'L') + x(i).toFixed(1) + ' ' + y(p.revenue).toFixed(1) + ' '; });
+      var area = line + 'L' + x(n-1).toFixed(1) + ' ' + H + ' L0 ' + H + ' Z';
+
+      var grid = '';
+      for (var g2=0; g2<=3; g2++){
+        var gy = (pad + (H - pad*2) * g2/3).toFixed(1);
+        grid += '<line x1="0" y1="'+gy+'" x2="'+W+'" y2="'+gy+'" stroke="var(--line-soft)" stroke-width="1"/>';
+      }
+      var dots = arr.map(function(p,i){ return '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.revenue).toFixed(1)+'" r="'+(range==7?3.5:0)+'" fill="var(--green)"/>'; }).join('');
+
+      svg.innerHTML =
+        '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0" stop-color="var(--green)" stop-opacity="0.35"/>'+
+        '<stop offset="1" stop-color="var(--green)" stop-opacity="0"/></linearGradient></defs>'+
+        grid + '<path d="'+area+'" fill="url(#rg)"/>'+
+        '<path d="'+line+'" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+ dots;
+
+      if (range == 7){
+        labelsEl.innerHTML = arr.map(function(p){ return '<span class="chart-axis">'+DOW[new Date(p.date).getDay()]+'</span>'; }).join('');
+      } else {
+        var fmt = function(dt){ return (dt.getMonth()+1)+'/'+dt.getDate(); };
+        labelsEl.innerHTML = '<span class="chart-axis">'+fmt(new Date(arr[0].date))+'</span><span class="chart-axis">'+fmt(new Date(arr[arr.length-1].date))+'</span>';
+      }
+    }
+    draw(7);
+    document.querySelectorAll('#revSeg button').forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll('#revSeg button').forEach(function(x){ x.classList.remove('active'); });
+        b.classList.add('active');
+        draw(b.getAttribute('data-range'));
+      });
+    });
+  })();
+</script>
+
+<%- include('partials/footer') %>

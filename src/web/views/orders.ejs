@@ -1,0 +1,36 @@
+<%- include('partials/header', { title: '주문 내역' }) %>
+
+<div class="section-label">
+  <span class="eyebrow">ORDERS</span>
+  <h2 class="section-title">주문 내역</h2>
+  <p class="section-desc">구매부터 자동 지급까지 모든 상태를 추적합니다.</p>
+</div>
+
+<div class="card">
+  <div class="scroll-x">
+  <% if (!orders.length) { %>
+    <p class="muted">아직 주문이 없습니다.</p>
+  <% } else { %>
+    <table class="tbl">
+      <thead><tr><th>주문번호</th><th>고객</th><th>상품</th><th style="text-align:right">금액</th><th>상태</th></tr></thead>
+      <tbody>
+      <% orders.forEach(function(o){
+           const dt = new Date(o.created_at);
+           const ord = 'ORD-' + dt.getFullYear() + String(dt.getMonth()+1).padStart(2,'0') + String(dt.getDate()).padStart(2,'0') + '-' + String(o.id).padStart(4,'0');
+           const uname = (userMap[o.discord_id] && userMap[o.discord_id].username) || o.discord_id;
+      %>
+        <tr>
+          <td class="mono"><%= ord %></td>
+          <td><div class="cust"><span class="ini"><%= String(uname).slice(0,1) %></span><span><%= uname %></span></div></td>
+          <td><%= o.product_name %></td>
+          <td style="text-align:right; font-weight:700"><%= won(o.price) %></td>
+          <td><span class="tag green">지급완료</span></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

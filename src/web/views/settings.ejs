@@ -1,0 +1,119 @@
+<%- include('partials/header', { title: '상점 설정' }) %>
+
+<div class="section-label">
+  <span class="eyebrow">CONFIGURATION</span>
+  <h2 class="section-title">상점 / 임베드 설정</h2>
+  <p class="section-desc">Discord 자판기 패널의 상점명·설명과 결제 정보를 설정합니다.</p>
+</div>
+
+<% if (saved) { %>
+  <div class="alert ok">
+    <% if (saved==='coin') { %>✅ 코인 설정이 저장되었습니다.
+    <% } else { %>✅ 설정이 저장되었고 패널에 즉시 반영되었습니다.<% } %>
+  </div>
+<% } %>
+<% if (typeof sync !== 'undefined' && sync) { %>
+  <div class="alert <%= sync==='ok' ? 'ok' : 'err' %>"><%= sync==='ok' ? '✅ 패널을 갱신했습니다.' : '⚠️ 패널을 찾을 수 없습니다. 디스코드에서 /패널 로 먼저 설치하세요.' %></div>
+<% } %>
+
+<!-- 기본 정보 & 임베드 -->
+<form method="post" action="/settings">
+  <div class="card">
+    <h2 class="section-title" style="font-size:20px; margin:0 0 6px">기본 정보</h2>
+    <label>상점 이름 (임베드 제목)</label>
+    <input type="text" name="shop_name" value="<%= settings.shop_name %>" />
+    <label>상점 설명 (임베드 본문 · 마크다운 가능)</label>
+    <textarea name="shop_description"><%= settings.shop_description %></textarea>
+    <div class="form-row">
+      <div><label>임베드 색상</label><input type="color" name="embed_color" value="<%= settings.embed_color %>" /></div>
+      <div><label>푸터 문구</label><input type="text" name="embed_footer" value="<%= settings.embed_footer %>" /></div>
+    </div>
+    <label>썸네일 이미지 URL</label><input type="text" name="embed_thumbnail" value="<%= settings.embed_thumbnail %>" placeholder="https://..." />
+    <label>큰 이미지 URL</label><input type="text" name="embed_image" value="<%= settings.embed_image %>" placeholder="https://..." />
+  </div>
+
+  <div class="card">
+    <h2 class="section-title" style="font-size:20px; margin:0 0 6px">🏦 계좌충전 (PG 미사용)</h2>
+    <p class="muted" style="font-size:13px; margin:0 0 8px">입금 알림 포워딩으로 자동 충전됩니다. (README 참고)</p>
+    <label>은행명</label><input type="text" name="bank_name" value="<%= settings.bank_name %>" placeholder="예: 카카오뱅크" />
+    <div class="form-row">
+      <div><label>예금주</label><input type="text" name="bank_holder" value="<%= settings.bank_holder %>" /></div>
+      <div><label>계좌번호</label><input type="text" name="bank_account" value="<%= settings.bank_account %>" /></div>
+    </div>
+    <div class="form-row" style="margin-top:6px">
+      <div><label>최소 충전액(원)</label><input type="number" name="charge_min" value="<%= settings.charge_min %>" /></div>
+      <div><label>충전 만료(분)</label><input type="number" name="charge_expire_minutes" value="<%= settings.charge_expire_minutes %>" /></div>
+      <div><label>코인 기본환율(원)</label><input type="number" name="coin_krw_rate" value="<%= settings.coin_krw_rate %>" /></div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px"><button class="btn green block">💾 저장 &amp; 패널 반영</button></div>
+</form>
+
+<!-- 코인 관리 -->
+<div class="section-label" style="margin-top:28px">
+  <h2 class="section-title" style="font-size:24px; margin:0">🪙 코인충전 관리</h2>
+  <p class="section-desc" style="margin-top:8px">코인충전에서 선택 가능한 코인(LTC, SOL, USDT 등)과 지갑 주소·환율을 관리합니다.</p>
+</div>
+
+<details class="editor" style="margin-bottom:16px">
+  <summary><span class="btn green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> 코인 추가</span></summary>
+  <div class="card" style="margin-top:12px">
+    <form method="post" action="/coins">
+      <div class="form-row">
+        <div><label>심볼</label><input type="text" name="symbol" placeholder="LTC" required /></div>
+        <div><label>네트워크</label><input type="text" name="network" placeholder="Litecoin / TRC20 / BEP20 / Solana" required /></div>
+      </div>
+      <label>지갑 주소</label><input type="text" name="wallet" placeholder="입금받을 지갑 주소" />
+      <div class="form-row">
+        <div><label>환율 (1코인 = ?원)</label><input type="number" step="any" name="krw_rate" placeholder="130000" required /></div>
+        <div><label>소수 자리</label><input type="number" name="decimals" value="6" /></div>
+        <div><label>정렬</label><input type="number" name="position" value="0" /></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="enabled" checked style="width:auto" /> 사용 활성화</label>
+      <div style="margin-top:16px"><button class="btn green">코인 추가</button></div>
+    </form>
+  </div>
+</details>
+
+<div class="stack">
+  <% coins.forEach(function(c){ %>
+  <div class="card">
+    <div class="item-head" style="align-items:center">
+      <div class="tile plain sm" style="font-size:20px"><%= ({USDT:'💵',SOL:'◎',LTC:'Ł',BTC:'₿',ETH:'Ξ'})[c.symbol] || '🪙' %></div>
+      <div style="flex:1">
+        <div class="name" style="font-size:19px"><%= c.symbol %> <span class="muted" style="font-size:15px">· <%= c.network %></span></div>
+        <div class="desc" style="color:var(--muted)">1 <%= c.symbol %> ≈ <%= won(c.krw_rate) %> · <%= c.wallet ? '지갑 설정됨' : '지갑 미설정' %></div>
+      </div>
+      <span class="pill <%= c.enabled && c.wallet ? 'on' : 'off' %>"><span class="dot"></span> <%= c.enabled ? '사용' : '중지' %></span>
+    </div>
+    <details class="editor" style="margin-top:8px">
+      <summary>수정 / 삭제</summary>
+      <form method="post" action="/coins/<%= c.id %>/update" style="margin-top:12px">
+        <div class="form-row">
+          <div><label>심볼</label><input type="text" name="symbol" value="<%= c.symbol %>" /></div>
+          <div><label>네트워크</label><input type="text" name="network" value="<%= c.network %>" /></div>
+        </div>
+        <label>지갑 주소</label><input type="text" name="wallet" value="<%= c.wallet %>" />
+        <div class="form-row">
+          <div><label>환율(원)</label><input type="number" step="any" name="krw_rate" value="<%= c.krw_rate %>" /></div>
+          <div><label>소수 자리</label><input type="number" name="decimals" value="<%= c.decimals %>" /></div>
+          <div><label>정렬</label><input type="number" name="position" value="<%= c.position %>" /></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="enabled" <%= c.enabled ? 'checked' : '' %> style="width:auto" /> 사용 활성화</label>
+        <div class="btn-row" style="margin-top:14px"><button class="btn green sm">저장</button></div>
+      </form>
+      <form method="post" action="/coins/<%= c.id %>/delete" onsubmit="return confirm('이 코인을 삭제할까요?')" style="margin-top:8px">
+        <button class="btn red sm">삭제</button>
+      </form>
+    </details>
+  </div>
+  <% }) %>
+</div>
+
+<div class="banner blue" style="margin-top:18px">
+  <div class="ico">?</div>
+  <div><b>Discord에 패널 설치</b><span class="flow">디스코드 채널에서 <span class="mono">/패널</span> 명령을 입력하면 자판기 임베드가 설치됩니다. 이후 상단의 <b>상점 메시지 동기화</b> 버튼으로 최신 설정을 반영하세요.</span></div>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,137 @@
+<%- include('partials/header', { title: '상품 관리' }) %>
+
+<div class="section-label">
+  <span class="eyebrow">CATALOG</span>
+  <h2 class="section-title">판매 상품</h2>
+  <p class="section-desc">카테고리, 가격, 지급 방식과 판매 상태를 한곳에서 관리합니다.</p>
+</div>
+
+<% if (!categories.length) { %>
+  <div class="banner blue" style="margin-bottom:16px">
+    <div class="ico">!</div>
+    <div><b>카테고리가 필요합니다</b><span class="flow">먼저 <a href="/categories">카테고리</a>를 하나 이상 추가해 주세요.</span></div>
+  </div>
+<% } else { %>
+<details class="editor" style="margin-bottom:16px" <%= products.length ? '' : 'open' %>>
+  <summary><span class="btn green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> 상품 등록</span></summary>
+  <div class="card" style="margin-top:12px">
+    <form method="post" action="/products">
+      <div class="form-row">
+        <div><label>카테고리</label>
+          <select name="category_id" required>
+            <% categories.forEach(c => { %><option value="<%= c.id %>"><%= c.emoji %> <%= c.name %></option><% }) %>
+          </select>
+        </div>
+        <div><label>상품명</label><input type="text" name="name" required /></div>
+      </div>
+      <div class="form-row">
+        <div><label>이모지</label><input type="text" name="emoji" placeholder="💎" /></div>
+        <div><label>가격(원)</label><input type="number" name="price" value="0" required /></div>
+        <div><label>정렬</label><input type="number" name="position" value="0" /></div>
+      </div>
+      <label>설명 (예: 즉시 지급, 5% 할인 적용)</label><input type="text" name="description" />
+      <div class="form-row">
+        <div><label>배송 방식</label>
+          <select name="delivery_type" class="dtype-select" onchange="toggleRbx(this)">
+            <option value="stock">재고 코드 지급 (기본)</option>
+            <option value="roblox_trade">로블록스 게임 트레이드</option>
+          </select>
+        </div>
+        <div class="rbx-field" style="display:none"><label>게임</label><input type="text" name="roblox_game" value="Grow a Garden 2" /></div>
+        <div class="rbx-field" style="display:none"><label>게임 내 아이템명</label><input type="text" name="roblox_item" placeholder="예: 무지개 씨앗" /></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="is_active" checked style="width:auto" /> 판매 활성화</label>
+      <div style="margin-top:16px"><button class="btn green">상품 추가</button></div>
+    </form>
+  </div>
+</details>
+<% } %>
+
+<div class="between" style="gap:12px; margin-bottom:16px">
+  <div class="search" style="flex:1">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+    <input type="search" id="prodSearch" placeholder="상품 검색" />
+  </div>
+  <span class="count-note"><%= products.length %>개 상품</span>
+</div>
+
+<div class="stack" id="prodList">
+  <% products.forEach(p => { %>
+  <div class="card item-card" data-name="<%= (p.name + ' ' + (p.category ? p.category.name : '')).toLowerCase() %>">
+    <div class="item-head">
+      <div class="item-emoji"><%= p.emoji || '📦' %></div>
+      <div style="flex:1">
+        <div class="cat"><%= p.category ? p.category.name : '미분류' %></div>
+        <div class="name"><%= p.name %></div>
+        <div class="desc"><%= p.description || '즉시 지급' %></div>
+      </div>
+    </div>
+    <hr class="hr" />
+    <div class="price-row">
+      <div class="price"><%= won(p.price) %></div>
+      <div class="stock-txt <%= p.stock <= 5 ? 'low' : '' %>">재고 <%= p.stock %>개</div>
+    </div>
+    <div class="foot-row">
+      <span class="give">
+        <% if (p.delivery_type === 'roblox_trade') { %><span class="tag blue">🎮 로블록스 트레이드</span> <%= p.roblox_item ? '· ' + p.roblox_item : '' %>
+        <% } else { %>자동 코드 지급<% } %>
+      </span>
+      <% if (p.is_active) { %><span class="pill on"><span class="dot"></span> 판매 중</span>
+      <% } else { %><span class="pill off"><span class="dot"></span> 판매 중지</span><% } %>
+    </div>
+
+    <details class="editor" style="margin-top:6px">
+      <summary>✏️ 수정 / 재고 관리 / 삭제</summary>
+      <div style="padding-top:12px">
+        <a class="btn dark sm" href="/products/<%= p.id %>/stock">📥 재고 관리 (<%= p.stock %>개)</a>
+        <form method="post" action="/products/<%= p.id %>/update" style="margin-top:12px">
+          <div class="form-row">
+            <select name="category_id"><% categories.forEach(c => { %><option value="<%= c.id %>" <%= c.id===p.category_id?'selected':'' %>><%= c.name %></option><% }) %></select>
+            <input type="text" name="name" value="<%= p.name %>" />
+            <input type="text" name="emoji" value="<%= p.emoji %>" placeholder="이모지" style="max-width:90px" />
+          </div>
+          <div class="form-row" style="margin-top:10px">
+            <input type="number" name="price" value="<%= p.price %>" />
+            <input type="number" name="position" value="<%= p.position %>" />
+            <select name="is_active"><option value="1" <%= p.is_active?'selected':'' %>>판매 중</option><option value="" <%= !p.is_active?'selected':'' %>>중지</option></select>
+          </div>
+          <input type="text" name="description" value="<%= p.description %>" style="margin-top:10px" />
+          <div class="form-row" style="margin-top:10px">
+            <select name="delivery_type" onchange="toggleRbx(this)">
+              <option value="stock" <%= p.delivery_type!=='roblox_trade'?'selected':'' %>>재고 코드 지급</option>
+              <option value="roblox_trade" <%= p.delivery_type==='roblox_trade'?'selected':'' %>>로블록스 트레이드</option>
+            </select>
+            <input type="text" name="roblox_game" value="<%= p.roblox_game || 'Grow a Garden 2' %>" placeholder="게임" class="rbx-field" style="<%= p.delivery_type==='roblox_trade'?'':'display:none' %>" />
+            <input type="text" name="roblox_item" value="<%= p.roblox_item %>" placeholder="게임 내 아이템명" class="rbx-field" style="<%= p.delivery_type==='roblox_trade'?'':'display:none' %>" />
+          </div>
+          <div class="btn-row" style="margin-top:12px"><button class="btn green sm">저장</button></div>
+        </form>
+        <form method="post" action="/products/<%= p.id %>/delete" onsubmit="return confirm('상품과 모든 재고가 삭제됩니다. 계속할까요?')" style="margin-top:8px">
+          <button class="btn red sm">상품 삭제</button>
+        </form>
+      </div>
+    </details>
+  </div>
+  <% }) %>
+  <% if (!products.length) { %><p class="muted">등록된 상품이 없습니다.</p><% } %>
+</div>
+
+<script>
+  var s = document.getElementById('prodSearch');
+  if (s) s.addEventListener('input', function(){
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#prodList .item-card').forEach(function(el){
+      el.style.display = el.dataset.name.indexOf(q) > -1 ? '' : 'none';
+    });
+  });
+  // 배송 방식이 로블록스일 때만 게임/아이템 입력 표시
+  function toggleRbx(sel){
+    var show = sel.value === 'roblox_trade';
+    var scope = sel.closest('form');
+    scope.querySelectorAll('.rbx-field').forEach(function(el){ el.style.display = show ? '' : 'none'; });
+  }
+  // 초기 상태 반영 (추가 폼)
+  document.querySelectorAll('select[name="delivery_type"]').forEach(function(sel){ toggleRbx(sel); });
+</script>
+
+<%- include('partials/footer') %>

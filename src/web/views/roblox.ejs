@@ -1,0 +1,167 @@
+<%- include('partials/header', { title: '로블록스 배송' }) %>
+
+<%
+  const STATUS = {
+    awaiting_username: { t:'닉네임 대기', c:'gray' },
+    queued:           { t:'대기열',     c:'blue' },
+    joined:           { t:'접속 확인',   c:'gold' },
+    completed:        { t:'완료',        c:'green' },
+    failed:           { t:'실패',        c:'red' },
+    cancelled:        { t:'취소',        c:'gray' },
+  };
+  const activeServers = servers.filter(s => s.status === 'active');
+%>
+
+<div class="section-label">
+  <span class="eyebrow">FULFILLMENT</span>
+  <h2 class="section-title">게임 아이템 배송</h2>
+  <p class="section-desc">Grow a Garden 2 등 게임 내 트레이드로 지급되는 주문을 처리합니다.</p>
+</div>
+
+<div class="banner blue" style="margin-bottom:18px">
+  <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></div>
+  <div>
+    <b>배송 흐름</b>
+    <span class="flow">구매 <span style="color:var(--green)">→</span> 로블록스 닉네임 등록(자동 DM) <span style="color:var(--green)">→</span> VIP 서버 링크 발송 <span style="color:var(--green)">→</span> 꼭두각시 계정이 트레이드 지급 <span style="color:var(--green)">→</span> 완료 처리</span>
+    <div class="flow" style="margin-top:6px; color:var(--muted); font-size:13px">게임 내 트레이드는 오퍼레이터 또는 처리 API(<span class="mono">/api/roblox/queue</span>)로 수행합니다. 완료/실패 시 유저에게 자동 DM · 실패 시 자동 환불됩니다.</div>
+  </div>
+</div>
+
+<div class="between" style="margin-bottom:14px">
+  <h2 class="section-title" style="font-size:22px; margin:0">배송 요청</h2>
+  <% if (pending) { %><span class="tag gold"><%= pending %>건 진행중</span><% } %>
+</div>
+
+<div class="stack">
+  <% deliveries.forEach(function(d){
+       const st = STATUS[d.status] || { t:d.status, c:'gray' };
+       const uname = d.userObj ? d.userObj.username : d.discord_id;
+       const done = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled';
+  %>
+  <div class="card">
+    <div class="item-head" style="align-items:center">
+      <div class="item-emoji sm" style="width:52px;height:52px;border-radius:14px;font-size:24px">🎮</div>
+      <div style="flex:1; min-width:0">
+        <div class="name" style="font-size:19px"><%= d.roblox_item || d.product_name %> <span class="muted" style="font-size:14px">x<%= d.quantity %></span></div>
+        <div class="desc" style="color:var(--muted)">배송 #<%= d.id %> · <%= won(d.price) %> · <%= new Date(d.created_at).toLocaleString('ko-KR') %></div>
+      </div>
+      <span class="tag <%= st.c %>"><%= st.t %></span>
+    </div>
+
+    <hr class="hr" />
+
+    <div class="grid cols-2" style="gap:10px">
+      <div class="kv" style="border:none; padding:6px 0">
+        <span class="k">디스코드</span>
+        <span class="v mono"><%= uname %></span>
+      </div>
+      <div class="kv" style="border:none; padding:6px 0">
+        <span class="k">로블록스</span>
+        <span class="v">
+          <% if (d.roblox_username) { %>
+            <span class="cust" style="gap:8px; justify-content:flex-end">
+              <% if (d.avatar) { %><img src="<%= d.avatar %>" style="width:26px;height:26px;border-radius:50%" alt="" /><% } %>
+              <% if (d.profile) { %><a href="<%= d.profile %>" target="_blank" class="link-green"><%= d.roblox_username %></a><% } else { %><%= d.roblox_username %><% } %>
+            </span>
+          <% } else { %><span class="muted">닉네임 대기중</span><% } %>
+        </span>
+      </div>
+      <div class="kv" style="border:none; padding:6px 0">
+        <span class="k">VIP 서버</span>
+        <span class="v"><%- d.server ? d.server.name : '<span class="muted">미배정</span>' %></span>
+      </div>
+      <div class="kv" style="border:none; padding:6px 0">
+        <span class="k">꼭두각시</span>
+        <span class="v mono"><%= d.server && d.server.puppet_name ? d.server.puppet_name : '-' %></span>
+      </div>
+    </div>
+
+    <% if (!done) { %>
+    <hr class="hr" />
+    <div class="btn-row">
+      <form method="post" action="/roblox/<%= d.id %>/complete" style="display:inline"><button class="btn green sm">✅ 지급 완료</button></form>
+      <form method="post" action="/roblox/<%= d.id %>/fail" style="display:inline" onsubmit="return confirm('실패 처리하고 환불할까요?')">
+        <input type="hidden" name="refund" value="1" />
+        <button class="btn red sm">실패 · 환불</button>
+      </form>
+      <% if (d.roblox_username) { %><form method="post" action="/roblox/<%= d.id %>/resend" style="display:inline"><button class="btn dark sm">🔗 링크 재발송</button></form><% } %>
+    </div>
+    <% if (activeServers.length) { %>
+    <form method="post" action="/roblox/<%= d.id %>/assign" style="margin-top:10px; display:flex; gap:8px">
+      <select name="server_id" style="flex:1">
+        <% activeServers.forEach(function(s){ %><option value="<%= s.id %>" <%= d.vip_server_id===s.id?'selected':'' %>><%= s.name %> <%= s.puppet_name?('· '+s.puppet_name):'' %></option><% }) %>
+      </select>
+      <button class="btn dark sm">서버 배정 + 안내</button>
+    </form>
+    <% } %>
+    <% } %>
+    <% if (d.note) { %><div class="muted" style="font-size:13px; margin-top:10px">메모: <%= d.note %></div><% } %>
+  </div>
+  <% }) %>
+  <% if (!deliveries.length) { %><p class="muted">아직 게임 아이템 배송 요청이 없습니다.</p><% } %>
+</div>
+
+<!-- VIP 서버 / 꼭두각시 관리 -->
+<div class="section-label" style="margin-top:32px">
+  <span class="eyebrow">PUPPET POOL</span>
+  <h2 class="section-title">VIP 서버 / 꼭두각시</h2>
+  <p class="section-desc">아이템을 지급할 VIP 서버 링크와 상주 계정을 등록합니다. 주문은 부하가 적은 서버로 자동 배정됩니다.</p>
+</div>
+
+<details class="editor" style="margin-bottom:16px" <%= servers.length ? '' : 'open' %>>
+  <summary><span class="btn green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> VIP 서버 추가</span></summary>
+  <div class="card" style="margin-top:12px">
+    <form method="post" action="/vip-servers">
+      <div class="form-row">
+        <div><label>서버 이름</label><input type="text" name="name" placeholder="예: GAG2 지급서버 A" required /></div>
+        <div><label>게임</label><input type="text" name="game" value="Grow a Garden 2" /></div>
+      </div>
+      <label>VIP 서버 링크</label><input type="text" name="vip_link" placeholder="https://www.roblox.com/games/.../..?privateServerLinkCode=..." required />
+      <div class="form-row">
+        <div><label>꼭두각시 로블록스 닉네임</label><input type="text" name="puppet_name" placeholder="상주 계정 닉네임" /></div>
+        <div><label>동시 처리 한도 (0=무제한)</label><input type="number" name="capacity" value="0" /></div>
+        <div><label>상태</label><select name="status"><option value="active">활성</option><option value="paused">일시중지</option></select></div>
+      </div>
+      <label>메모</label><input type="text" name="notes" />
+      <div style="margin-top:16px"><button class="btn green">서버 추가</button></div>
+    </form>
+  </div>
+</details>
+
+<div class="stack">
+  <% servers.forEach(function(s){ %>
+  <div class="card">
+    <div class="item-head" style="align-items:center">
+      <div class="tile plain sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></div>
+      <div style="flex:1; min-width:0">
+        <div class="name" style="font-size:18px"><%= s.name %></div>
+        <div class="desc" style="color:var(--muted)"><%= s.game %> · 꼭두각시 <%= s.puppet_name || '-' %></div>
+      </div>
+      <span class="pill <%= s.status==='active' ? 'on' : 'off' %>"><span class="dot"></span> <%= s.status==='active' ? '활성' : '중지' %></span>
+    </div>
+    <details class="editor" style="margin-top:8px">
+      <summary>수정 / 삭제</summary>
+      <form method="post" action="/vip-servers/<%= s.id %>/update" style="margin-top:12px">
+        <div class="form-row">
+          <input type="text" name="name" value="<%= s.name %>" />
+          <input type="text" name="game" value="<%= s.game %>" />
+        </div>
+        <input type="text" name="vip_link" value="<%= s.vip_link %>" style="margin-top:10px" />
+        <div class="form-row" style="margin-top:10px">
+          <input type="text" name="puppet_name" value="<%= s.puppet_name %>" placeholder="꼭두각시" />
+          <input type="number" name="capacity" value="<%= s.capacity %>" />
+          <select name="status"><option value="active" <%= s.status==='active'?'selected':'' %>>활성</option><option value="paused" <%= s.status==='paused'?'selected':'' %>>중지</option></select>
+        </div>
+        <input type="text" name="notes" value="<%= s.notes %>" placeholder="메모" style="margin-top:10px" />
+        <div class="btn-row" style="margin-top:12px"><button class="btn green sm">저장</button></div>
+      </form>
+      <form method="post" action="/vip-servers/<%= s.id %>/delete" onsubmit="return confirm('이 서버를 삭제할까요?')" style="margin-top:8px">
+        <button class="btn red sm">삭제</button>
+      </form>
+    </details>
+  </div>
+  <% }) %>
+  <% if (!servers.length) { %><p class="muted">등록된 VIP 서버가 없습니다.</p><% } %>
+</div>
+
+<%- include('partials/footer') %>
