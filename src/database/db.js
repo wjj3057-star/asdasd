@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS guilds (
   activated_at INTEGER,
   expires_at   INTEGER DEFAULT 0,   -- 구독 만료 (ms). 0=미구독
   last_key     TEXT DEFAULT '',
+  notify_stage TEXT DEFAULT '',     -- 만료 알림 발송 단계 ('' | 3d | 1d | expired)
   created_at   INTEGER NOT NULL
 );
 
@@ -227,6 +228,7 @@ ensureColumn('charge_requests', 'coin_network', "coin_network TEXT DEFAULT ''");
 ensureColumn('products', 'delivery_type', "delivery_type TEXT DEFAULT 'stock'");
 ensureColumn('products', 'roblox_item', "roblox_item TEXT DEFAULT ''");
 ensureColumn('products', 'roblox_game', "roblox_game TEXT DEFAULT 'Grow a Garden 2'");
+ensureColumn('guilds', 'notify_stage', "notify_stage TEXT DEFAULT ''");
 
 // 구버전 users 테이블(단일 PK discord_id) → 복합키 재구성
 (function migrateUsers() {

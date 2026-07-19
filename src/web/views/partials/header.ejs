@@ -48,6 +48,7 @@
     <% }) %>
     <% if (typeof isOwner !== 'undefined' && isOwner) { %>
       <a href="/owner/licenses" class="tab <%= active==='owner' ? 'active' : '' %>" title="라이선스"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg></a>
+      <a href="/owner/stats" class="tab <%= active==='ownerstats' ? 'active' : '' %>" title="통합 통계"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.5" y="7" width="3.5" height="11" rx="1"/><rect x="16" y="3" width="3.5" height="15" rx="1"/></svg></a>
     <% } %>
     <span class="spacer"></span>
     <% if (typeof user !== 'undefined' && user && user.avatar) { %>

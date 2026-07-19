@@ -80,17 +80,24 @@ const Guilds = {
     const g = Guilds.get(gid);
     return !!(g && g.expires_at && g.expires_at > now());
   },
-  // 라이선스 적용 (기존 만료일에 이어붙임)
+  // 라이선스 적용 (기존 만료일에 이어붙임) — 알림 단계도 초기화
   activate(gid, plan, days, key, userId, guildName = '') {
     const g = Guilds.ensure(gid, guildName);
     const base = Math.max(now(), g.expires_at || 0);
     const expires = base + days * 24 * 60 * 60 * 1000;
     db.prepare(
-      'UPDATE guilds SET plan=?, activated_at=?, expires_at=?, last_key=?, manager_id=COALESCE(NULLIF(manager_id,\'\'), ?) WHERE guild_id=?'
+      "UPDATE guilds SET plan=?, activated_at=?, expires_at=?, last_key=?, notify_stage='', manager_id=COALESCE(NULLIF(manager_id,''), ?) WHERE guild_id=?"
     ).run(plan, now(), expires, key, userId, gid);
     // 최초 활성화 시 기본 코인 시드
     seedCoinsForGuild(gid);
     return Guilds.get(gid);
+  },
+  setNotifyStage(gid, stage) {
+    db.prepare('UPDATE guilds SET notify_stage=? WHERE guild_id=?').run(stage, gid);
+  },
+  // 구독 이력이 있는(만료일이 설정된) 길드 — 만료 알림 대상
+  withSubscription() {
+    return db.prepare('SELECT * FROM guilds WHERE expires_at > 0').all();
   },
 };
 
@@ -612,6 +619,73 @@ function dashboard(gid) {
   };
 }
 
+/* =========================================================
+ * 오너 통합 통계 (전 서버 집계)
+ * =======================================================*/
+function ownerOverview() {
+  const nowMs = now();
+  const guilds = Guilds.all().map((g) => {
+    const revenue = db.prepare('SELECT COALESCE(SUM(price),0) s FROM purchases WHERE guild_id=?').get(g.guild_id).s;
+    const orders = db.prepare('SELECT COUNT(*) c FROM purchases WHERE guild_id=?').get(g.guild_id).c;
+    const users = db.prepare('SELECT COUNT(*) c FROM users WHERE guild_id=?').get(g.guild_id).c;
+    const balance = db.prepare('SELECT COALESCE(SUM(balance),0) s FROM users WHERE guild_id=?').get(g.guild_id).s;
+    const stock = db.prepare("SELECT COUNT(*) c FROM stock WHERE guild_id=? AND status='available'").get(g.guild_id).c;
+    const pendingCharges = db.prepare("SELECT COUNT(*) c FROM charge_requests WHERE guild_id=? AND status='pending'").get(g.guild_id).c;
+    const pendingDeliveries = db.prepare("SELECT COUNT(*) c FROM roblox_deliveries WHERE guild_id=? AND status IN ('awaiting_username','queued','joined')").get(g.guild_id).c;
+    const todayRevenue = revenueBetween(g.guild_id, startOfDay(0), startOfDay(1));
+    return {
+      ...g,
+      active: !!(g.expires_at && g.expires_at > nowMs),
+      daysLeft: g.expires_at ? Math.max(0, Math.ceil((g.expires_at - nowMs) / 86400000)) : 0,
+      revenue, orders, users, balance, stock, pendingCharges, pendingDeliveries, todayRevenue,
+    };
+  });
+
+  // 전 서버 합산 일별 매출 (7/30일)
+  const dailyAll = (days) => {
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const start = startOfDay(-i), end = startOfDay(-i + 1);
+      const revenue = db.prepare('SELECT COALESCE(SUM(price),0) s FROM purchases WHERE created_at>=? AND created_at<?').get(start, end).s;
+      out.push({ date: start, revenue });
+    }
+    return out;
+  };
+
+  // 라이선스 현황 + 판매수익 추정 (요금제 가격 × 사용된 키)
+  const keyRows = db.prepare('SELECT plan, COUNT(*) c FROM license_keys WHERE used=1 GROUP BY plan').all();
+  let licenseRevenue = 0;
+  const planSales = {};
+  for (const r of keyRows) {
+    const plan = config.plans[r.plan];
+    planSales[r.plan] = r.c;
+    if (plan && plan.price) licenseRevenue += plan.price * r.c;
+  }
+
+  return {
+    guilds: guilds.sort((a, b) => b.revenue - a.revenue),
+    totals: {
+      guildCount: guilds.length,
+      activeCount: guilds.filter((g) => g.active).length,
+      revenue: guilds.reduce((s, g) => s + g.revenue, 0),
+      todayRevenue: guilds.reduce((s, g) => s + g.todayRevenue, 0),
+      orders: guilds.reduce((s, g) => s + g.orders, 0),
+      users: guilds.reduce((s, g) => s + g.users, 0),
+      balance: guilds.reduce((s, g) => s + g.balance, 0),
+      pendingCharges: guilds.reduce((s, g) => s + g.pendingCharges, 0),
+      pendingDeliveries: guilds.reduce((s, g) => s + g.pendingDeliveries, 0),
+    },
+    licenses: {
+      unused: LicenseKeys.unusedCount(),
+      used: keyRows.reduce((s, r) => s + r.c, 0),
+      planSales,
+      revenue: licenseRevenue,
+    },
+    daily7: dailyAll(7),
+    daily30: dailyAll(30),
+  };
+}
+
 module.exports = {
   db,
   DEFAULT_SETTINGS,
@@ -621,4 +695,5 @@ module.exports = {
   Coins, VipServers, Deliveries,
   seedCoinsForGuild,
   dashboard, dailyRevenue, lowStockProducts, chargeSuccessRate,
+  ownerOverview,
 };

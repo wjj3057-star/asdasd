@@ -18,6 +18,7 @@ const {
   VipServers,
   Deliveries,
   dashboard,
+  ownerOverview,
 } = require('../database/models');
 const { approveCharge, rejectCharge } = require('../payments/chargeService');
 const deliveryService = require('../roblox/deliveryService');
@@ -112,6 +113,23 @@ router.post('/owner/licenses/:id/delete', (req, res) => {
   if (!res.locals.isOwner) return res.redirect('/');
   LicenseKeys.remove(parseInt(req.params.id, 10));
   res.redirect('/owner/licenses');
+});
+
+/* ---------------- 소유자: 통합 통계 ---------------- */
+router.get('/owner/stats', (req, res) => {
+  if (!res.locals.isOwner) return res.redirect('/');
+  res.render('owner_stats', {
+    title: '통합 통계',
+    active: 'ownerstats',
+    settings: getAllSettings(req.gid),
+    user: req.session.user,
+    guilds: res.locals.guilds,
+    isOwner: true,
+    currentGuild: res.locals.currentGuild,
+    plans: config.plans,
+    ov: ownerOverview(),
+    won,
+  });
 });
 
 /* ---------------- 대시보드 ---------------- */

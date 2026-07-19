@@ -26,10 +26,10 @@ const config = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
-  // 요금제 정의 (일수)
+  // 요금제 정의 (일수 + 판매가는 통계 추정용 · 환경변수로 조정 가능)
   plans: {
-    '1m': { label: '1개월', days: 30 },
-    '3m': { label: '3개월', days: 90 },
+    '1m': { label: '1개월', days: 30, price: parseInt(process.env.PLAN_1M_PRICE || '10000', 10) },
+    '3m': { label: '3개월', days: 90, price: parseInt(process.env.PLAN_3M_PRICE || '27000', 10) },
   },
   web: {
     // Pterodactyl/Docker 계열 호스팅(fps.ms 등)은 포트를 SERVER_PORT 로 주입한다.

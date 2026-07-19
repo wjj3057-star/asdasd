@@ -5,6 +5,7 @@ const web = require('./web/server');
 const chargeService = require('./payments/chargeService');
 const deliveryService = require('./roblox/deliveryService');
 const coinPoller = require('./payments/coinPoller');
+const expiryNotifier = require('./services/expiryNotifier');
 const { Charges } = require('./database/models');
 
 async function main() {
@@ -20,6 +21,7 @@ async function main() {
     if (botClient) {
       chargeService.setBotClient(botClient);
       deliveryService.setBotClient(botClient);
+      expiryNotifier.setBotClient(botClient);
     }
   } catch (e) {
     console.error('봇 시작 실패(웹 대시보드만 실행):', e.message);
@@ -30,6 +32,9 @@ async function main() {
 
   // 3) 코인 자동확인 폴러
   coinPoller.start();
+
+  // 3.5) 구독 만료 알림 (3일전/1일전/만료 DM)
+  expiryNotifier.start();
 
   // 4) 만료된 충전요청 정리 (5분마다)
   setInterval(() => {
