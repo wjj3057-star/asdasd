@@ -6,9 +6,10 @@ const { won } = require('../../util');
 
 // 정보 버튼: 내 잔액/입금자명/구매내역
 async function showInfo(interaction) {
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
-  const purchases = Purchases.byUser(interaction.user.id, 5);
-  const pending = Charges.pendingByUser(interaction.user.id);
+  const gid = interaction.guildId;
+  const user = Users.ensure(gid, interaction.user.id, interaction.user.username);
+  const purchases = Purchases.byUser(gid, interaction.user.id, 5);
+  const pending = Charges.pendingByUser(gid, interaction.user.id);
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -20,7 +21,7 @@ async function showInfo(interaction) {
       { name: '입금자명', value: user.deposit_name || '미설정', inline: true },
       { name: '누적 충전', value: won(user.total_charged), inline: true },
       { name: '누적 사용', value: won(user.total_spent), inline: true },
-      { name: '구매 횟수', value: `${Purchases.byUser(interaction.user.id, 9999).length}회`, inline: true }
+      { name: '구매 횟수', value: `${Purchases.byUser(gid, interaction.user.id, 9999).length}회`, inline: true }
     );
 
   if (pending.length) {

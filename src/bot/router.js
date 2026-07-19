@@ -6,10 +6,29 @@ const charge = require('./flows/charge');
 const info = require('./flows/info');
 const products = require('./flows/products');
 const roblox = require('./flows/roblox');
+const { Guilds } = require('../database/models');
+
+// 라이선스(구독) 게이트: 미인증 서버에서는 자판기 기능을 잠근다.
+// 길드 컨텍스트가 있는 vm: 상호작용에만 적용 (DM 배송 상호작용은 통과).
+function gate(interaction) {
+  if (!interaction.inGuild || !interaction.inGuild()) return true;
+  if (!String(interaction.customId || '').startsWith('vm:')) return true;
+  if (Guilds.isActive(interaction.guildId)) return true;
+  const payload = {
+    content: '🔒 이 서버는 아직 **구독이 활성화되지 않았거나 만료**되었습니다.\n서버 관리자가 `/인증 <키>` 로 라이선스를 등록하면 이용할 수 있습니다.',
+    ephemeral: true,
+  };
+  (interaction.replied || interaction.deferred
+    ? interaction.followUp(payload)
+    : interaction.reply(payload)
+  ).catch(() => {});
+  return false;
+}
 
 // 모든 상호작용을 라우팅
 async function handleInteraction(interaction) {
   try {
+    if (!gate(interaction)) return;
     if (interaction.isButton()) return handleButton(interaction);
     if (interaction.isStringSelectMenu()) return handleSelect(interaction);
     if (interaction.isModalSubmit()) return handleModal(interaction);

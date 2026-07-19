@@ -11,14 +11,47 @@ const db = new Database(path.join(DATA_DIR, 'market.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+/* ============================================================
+ * 멀티테넌트: 모든 도메인 데이터는 guild_id(디스코드 서버) 로 분리된다.
+ * ==========================================================*/
 db.exec(`
-CREATE TABLE IF NOT EXISTS settings (
-  key   TEXT PRIMARY KEY,
-  value TEXT
+-- 길드(서버)별 설정 (상점명/설명/계좌 등)
+CREATE TABLE IF NOT EXISTS guild_settings (
+  guild_id TEXT NOT NULL,
+  key      TEXT NOT NULL,
+  value    TEXT,
+  PRIMARY KEY (guild_id, key)
+);
+
+-- 길드 등록 + 구독(라이선스) 상태
+CREATE TABLE IF NOT EXISTS guilds (
+  guild_id     TEXT PRIMARY KEY,
+  name         TEXT DEFAULT '',
+  manager_id   TEXT DEFAULT '',     -- 라이선스를 등록한 서버 관리자
+  plan         TEXT DEFAULT '',     -- 1m | 3m
+  activated_at INTEGER,
+  expires_at   INTEGER DEFAULT 0,   -- 구독 만료 (ms). 0=미구독
+  last_key     TEXT DEFAULT '',
+  created_at   INTEGER NOT NULL
+);
+
+-- 일회용 라이선스 키 (소유자 발급)
+CREATE TABLE IF NOT EXISTS license_keys (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  key           TEXT UNIQUE NOT NULL,   -- 15자리 숫자
+  plan          TEXT NOT NULL,          -- 1m | 3m
+  created_by    TEXT DEFAULT '',
+  memo          TEXT DEFAULT '',
+  used          INTEGER DEFAULT 0,
+  used_by_guild TEXT DEFAULT '',
+  used_by_user  TEXT DEFAULT '',
+  used_at       INTEGER,
+  created_at    INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS categories (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL DEFAULT '',
   name        TEXT NOT NULL,
   description TEXT DEFAULT '',
   emoji       TEXT DEFAULT '',
@@ -28,6 +61,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE TABLE IF NOT EXISTS products (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id      TEXT NOT NULL DEFAULT '',
   category_id   INTEGER NOT NULL,
   name          TEXT NOT NULL,
   description   TEXT DEFAULT '',
@@ -36,53 +70,58 @@ CREATE TABLE IF NOT EXISTS products (
   min_role_id   TEXT DEFAULT '',
   position      INTEGER DEFAULT 0,
   is_active     INTEGER DEFAULT 1,
-  created_at    INTEGER NOT NULL,
-  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+  delivery_type TEXT DEFAULT 'stock',
+  roblox_item   TEXT DEFAULT '',
+  roblox_game   TEXT DEFAULT 'Grow a Garden 2',
+  created_at    INTEGER NOT NULL
 );
 
--- 재고: 한 행이 하나의 판매 단위(계정/키/코드 등)
 CREATE TABLE IF NOT EXISTS stock (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT NOT NULL DEFAULT '',
   product_id  INTEGER NOT NULL,
   content     TEXT NOT NULL,
-  status      TEXT NOT NULL DEFAULT 'available', -- available | sold
+  status      TEXT NOT NULL DEFAULT 'available',
   sold_to     TEXT DEFAULT '',
   sold_at     INTEGER,
-  created_at  INTEGER NOT NULL,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+  created_at  INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS users (
-  discord_id   TEXT PRIMARY KEY,
+  guild_id     TEXT NOT NULL DEFAULT '',
+  discord_id   TEXT NOT NULL,
   username     TEXT DEFAULT '',
   balance      INTEGER NOT NULL DEFAULT 0,
-  deposit_name TEXT DEFAULT '',          -- 최초 입력 후 고정되는 입금자명
+  deposit_name TEXT DEFAULT '',
   total_spent  INTEGER NOT NULL DEFAULT 0,
   total_charged INTEGER NOT NULL DEFAULT 0,
-  created_at   INTEGER NOT NULL
+  roblox_username TEXT DEFAULT '',
+  roblox_userid   TEXT DEFAULT '',
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (guild_id, discord_id)
 );
 
--- 충전 요청 (계좌/코인 공통)
 CREATE TABLE IF NOT EXISTS charge_requests (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id       TEXT NOT NULL DEFAULT '',
   discord_id     TEXT NOT NULL,
-  method         TEXT NOT NULL,            -- account | coin
-  amount         INTEGER NOT NULL,         -- 충전될 원화(잔액) 금액
-  expected_amount INTEGER NOT NULL,        -- 실제 입금해야 하는 금액(고유값 매칭)
-  depositor_name TEXT DEFAULT '',          -- 계좌충전 시 입금자명
+  method         TEXT NOT NULL,
+  amount         INTEGER NOT NULL,
+  expected_amount INTEGER NOT NULL,
+  depositor_name TEXT DEFAULT '',
   coin_symbol    TEXT DEFAULT '',
+  coin_network   TEXT DEFAULT '',
   coin_amount    TEXT DEFAULT '',
   address        TEXT DEFAULT '',
-  status         TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected | expired
+  status         TEXT NOT NULL DEFAULT 'pending',
   memo           TEXT DEFAULT '',
   created_at     INTEGER NOT NULL,
-  resolved_at    INTEGER,
-  FOREIGN KEY (discord_id) REFERENCES users(discord_id)
+  resolved_at    INTEGER
 );
 
--- 구매 내역
 CREATE TABLE IF NOT EXISTS purchases (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id     TEXT NOT NULL DEFAULT '',
   discord_id   TEXT NOT NULL,
   product_id   INTEGER,
   product_name TEXT DEFAULT '',
@@ -92,20 +131,20 @@ CREATE TABLE IF NOT EXISTS purchases (
   created_at   INTEGER NOT NULL
 );
 
--- 잔액 변동 원장
 CREATE TABLE IF NOT EXISTS transactions (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id      TEXT NOT NULL DEFAULT '',
   discord_id    TEXT NOT NULL,
-  type          TEXT NOT NULL,   -- charge | purchase | admin | refund
-  amount        INTEGER NOT NULL, -- +충전 / -구매
+  type          TEXT NOT NULL,
+  amount        INTEGER NOT NULL,
   balance_after INTEGER NOT NULL,
   memo          TEXT DEFAULT '',
   created_at    INTEGER NOT NULL
 );
 
--- 은행 입금 알림 원장 (문자/푸시 포워딩 수신)
 CREATE TABLE IF NOT EXISTS bank_notifications (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id    TEXT DEFAULT '',
   raw         TEXT DEFAULT '',
   depositor   TEXT DEFAULT '',
   amount      INTEGER,
@@ -114,37 +153,35 @@ CREATE TABLE IF NOT EXISTS bank_notifications (
   created_at  INTEGER NOT NULL
 );
 
--- 코인충전 지원 코인 목록 (LTC, SOL, USDT-TRC20, USDT-BSC 등)
 CREATE TABLE IF NOT EXISTS coins (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  symbol     TEXT NOT NULL,       -- LTC, SOL, USDT ...
-  network    TEXT NOT NULL,       -- Litecoin, Solana, TRC20, BEP20 ...
+  guild_id   TEXT NOT NULL DEFAULT '',
+  symbol     TEXT NOT NULL,
+  network    TEXT NOT NULL,
   wallet     TEXT DEFAULT '',
-  krw_rate   REAL NOT NULL DEFAULT 0, -- 1코인 = ?원
+  krw_rate   REAL NOT NULL DEFAULT 0,
   decimals   INTEGER DEFAULT 6,
   enabled    INTEGER DEFAULT 1,
   position   INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL
 );
-`);
 
-db.exec(`
--- 로블록스 VIP 서버 / 꼭두각시(전달용) 계정 풀
 CREATE TABLE IF NOT EXISTS vip_servers (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id      TEXT NOT NULL DEFAULT '',
   name          TEXT NOT NULL,
   game          TEXT DEFAULT 'Grow a Garden 2',
   vip_link      TEXT NOT NULL,
-  puppet_name   TEXT DEFAULT '',        -- 서버에 상주하는 꼭두각시 로블록스 닉네임
-  capacity      INTEGER DEFAULT 0,      -- 동시 처리 가능 수(0=무제한)
-  status        TEXT DEFAULT 'active',  -- active | paused
+  puppet_name   TEXT DEFAULT '',
+  capacity      INTEGER DEFAULT 0,
+  status        TEXT DEFAULT 'active',
   notes         TEXT DEFAULT '',
   created_at    INTEGER NOT NULL
 );
 
--- 로블록스 아이템 배송(트레이드) 세션
 CREATE TABLE IF NOT EXISTS roblox_deliveries (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id         TEXT NOT NULL DEFAULT '',
   purchase_id      INTEGER,
   discord_id       TEXT NOT NULL,
   product_id       INTEGER,
@@ -156,7 +193,6 @@ CREATE TABLE IF NOT EXISTS roblox_deliveries (
   roblox_userid    TEXT DEFAULT '',
   vip_server_id    INTEGER,
   status           TEXT NOT NULL DEFAULT 'awaiting_username',
-  -- awaiting_username | queued | joined | completed | failed | cancelled
   operator         TEXT DEFAULT '',
   note             TEXT DEFAULT '',
   created_at       INTEGER NOT NULL,
@@ -164,22 +200,50 @@ CREATE TABLE IF NOT EXISTS roblox_deliveries (
   joined_at        INTEGER,
   completed_at     INTEGER
 );
+
+CREATE INDEX IF NOT EXISTS idx_products_guild ON products(guild_id);
+CREATE INDEX IF NOT EXISTS idx_categories_guild ON categories(guild_id);
+CREATE INDEX IF NOT EXISTS idx_charges_guild ON charge_requests(guild_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_guild ON roblox_deliveries(guild_id);
 `);
 
-// ---- 간단 마이그레이션: 누락 컬럼 추가 ----
+/* ---- 마이그레이션: 구버전(단일서버) DB 업그레이드 ---- */
+function tableInfo(table) {
+  return db.prepare(`PRAGMA table_info(${table})`).all();
+}
 function ensureColumn(table, column, ddl) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-  if (!cols.some((c) => c.name === column)) {
+  if (!tableInfo(table).some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
   }
 }
+// 도메인 테이블에 guild_id 추가 (구버전 DB 대비)
+for (const t of [
+  'categories', 'products', 'stock', 'charge_requests', 'purchases',
+  'transactions', 'bank_notifications', 'coins', 'vip_servers', 'roblox_deliveries',
+]) {
+  ensureColumn(t, 'guild_id', "guild_id TEXT NOT NULL DEFAULT ''");
+}
 ensureColumn('charge_requests', 'coin_network', "coin_network TEXT DEFAULT ''");
-// 상품 배송 타입: stock(코드지급) | roblox_trade(게임 내 트레이드)
 ensureColumn('products', 'delivery_type', "delivery_type TEXT DEFAULT 'stock'");
 ensureColumn('products', 'roblox_item', "roblox_item TEXT DEFAULT ''");
 ensureColumn('products', 'roblox_game', "roblox_game TEXT DEFAULT 'Grow a Garden 2'");
-// 유저의 로블록스 계정 (재구매 시 재사용)
-ensureColumn('users', 'roblox_username', "roblox_username TEXT DEFAULT ''");
-ensureColumn('users', 'roblox_userid', "roblox_userid TEXT DEFAULT ''");
+
+// 구버전 users 테이블(단일 PK discord_id) → 복합키 재구성
+(function migrateUsers() {
+  const cols = tableInfo('users');
+  if (cols.length && !cols.some((c) => c.name === 'guild_id')) {
+    db.exec(`
+      ALTER TABLE users RENAME TO users_legacy;
+      CREATE TABLE users (
+        guild_id TEXT NOT NULL DEFAULT '', discord_id TEXT NOT NULL, username TEXT DEFAULT '',
+        balance INTEGER NOT NULL DEFAULT 0, deposit_name TEXT DEFAULT '',
+        total_spent INTEGER NOT NULL DEFAULT 0, total_charged INTEGER NOT NULL DEFAULT 0,
+        roblox_username TEXT DEFAULT '', roblox_userid TEXT DEFAULT '', created_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, discord_id)
+      );
+    `);
+    console.warn('[db] 구버전 users 테이블을 users_legacy 로 백업하고 멀티테넌트 구조로 전환했습니다.');
+  }
+})();
 
 module.exports = db;

@@ -1,0 +1,69 @@
+<%- include('partials/header', { title: '라이선스 관리' }) %>
+
+<%
+  function fmt(ms){ return ms ? new Date(ms).toLocaleString('ko-KR') : '-'; }
+  function group(k){ return k.replace(/(\d{5})(\d{5})(\d{5})/, '$1-$2-$3'); }
+%>
+
+<div class="section-label">
+  <span class="eyebrow">OWNER · LICENSE</span>
+  <h2 class="section-title">라이선스 키 관리</h2>
+  <p class="section-desc">일회용 15자리 키를 발급하고, 서버 관리자가 <span class="mono">/인증 &lt;키&gt;</span> 로 등록하면 해당 서버가 활성화됩니다.</p>
+</div>
+
+<div class="grid cols-3" style="margin-bottom:16px">
+  <div class="card stat"><div class="tile green-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg></div><div><div class="label">미사용 키</div><div class="value"><%= unused %></div></div></div>
+  <div class="card stat"><div class="tile blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 12 3 4 7v10l8 4 8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></div><div><div class="label">등록된 서버</div><div class="value"><%= allGuilds.length %></div></div></div>
+  <div class="card stat"><div class="tile gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><div class="label">활성 구독</div><div class="value"><%= allGuilds.filter(g=>g.expires_at>Date.now()).length %></div></div></div>
+</div>
+
+<% if (generated) { %>
+  <div class="card" style="border-color:var(--green-dim)">
+    <div class="between"><h2 class="section-title" style="font-size:18px;margin:0">✅ <%= plans[generated.plan] ? plans[generated.plan].label : generated.plan %> 키 <%= generated.keys.length %>개 발급됨</h2><span class="tag green">복사해서 전달하세요</span></div>
+    <div class="mono" style="margin-top:12px; background:var(--bg-soft); border:1px solid var(--line); border-radius:12px; padding:14px; line-height:2; user-select:all">
+      <% generated.keys.forEach(function(k){ %><div><%= group(k) %></div><% }) %>
+    </div>
+  </div>
+<% } %>
+
+<div class="card">
+  <h2 class="section-title" style="font-size:18px; margin:0 0 6px">키 발급</h2>
+  <form method="post" action="/owner/licenses">
+    <div class="form-row">
+      <div><label>요금제</label>
+        <select name="plan">
+          <% Object.keys(plans).forEach(function(p){ %><option value="<%= p %>"><%= plans[p].label %> (<%= plans[p].days %>일)</option><% }) %>
+        </select>
+      </div>
+      <div><label>수량 (최대 50)</label><input type="number" name="count" value="1" min="1" max="50" /></div>
+      <div><label>메모 (선택)</label><input type="text" name="memo" placeholder="구매자/판매처 등" /></div>
+    </div>
+    <div style="margin-top:16px"><button class="btn green">🔑 키 발급</button></div>
+  </form>
+</div>
+
+<div class="section-label" style="margin-top:24px">
+  <h2 class="section-title" style="font-size:22px; margin:0">발급 내역</h2>
+</div>
+<div class="card">
+  <div class="scroll-x">
+    <table class="tbl">
+      <thead><tr><th>키</th><th>요금제</th><th>상태</th><th>사용 서버</th><th>사용 시각</th><th></th></tr></thead>
+      <tbody>
+      <% keys.forEach(function(k){ var g = guildMap[k.used_by_guild]; %>
+        <tr>
+          <td class="mono"><%= group(k.key) %></td>
+          <td><%= plans[k.plan] ? plans[k.plan].label : k.plan %></td>
+          <td><%- k.used ? '<span class="tag gray">사용됨</span>' : '<span class="tag green">미사용</span>' %></td>
+          <td><%= k.used ? ((g && g.name) || k.used_by_guild || '-') : '-' %></td>
+          <td class="muted"><%= fmt(k.used_at) %></td>
+          <td><% if (!k.used) { %><form method="post" action="/owner/licenses/<%= k.id %>/delete" style="display:inline" onsubmit="return confirm('이 키를 삭제할까요?')"><button class="btn red sm">삭제</button></form><% } %></td>
+        </tr>
+      <% }) %>
+      <% if (!keys.length) { %><tr><td colspan="6" class="muted">발급된 키가 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

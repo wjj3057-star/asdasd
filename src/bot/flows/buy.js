@@ -16,7 +16,8 @@ const { won } = require('../../util');
 
 // 사진2: "구매하기 - 카테고리를 선택하면 제품 목록이 열립니다"
 async function startBuy(interaction) {
-  const cats = Categories.all();
+  const gid = interaction.guildId;
+  const cats = Categories.all(gid);
   const embed = new EmbedBuilder()
     .setColor(0x57f287)
     .setTitle('🛒 구매하기')
@@ -47,6 +48,7 @@ async function startBuy(interaction) {
 }
 
 async function onCategorySelected(interaction) {
+  const gid = interaction.guildId;
   const categoryId = parseInt(interaction.values[0], 10);
   const cat = Categories.get(categoryId);
   if (!cat) return interaction.update({ content: '카테고리를 찾을 수 없습니다.', embeds: [], components: [] });
@@ -58,7 +60,7 @@ async function onCategorySelected(interaction) {
     .setDescription(cat.description || '구매할 제품을 선택하세요.');
 
   // 카테고리 선택 메뉴는 유지, 제품 선택 메뉴 추가
-  const cats = Categories.all();
+  const cats = Categories.all(gid);
   const catMenu = new StringSelectMenuBuilder()
     .setCustomId(IDS.SELECT_CATEGORY)
     .setPlaceholder(`${cat.name} (변경하려면 선택)`)
@@ -110,7 +112,7 @@ async function onProductSelected(interaction) {
   if (!product) return interaction.update({ content: '제품을 찾을 수 없습니다.', embeds: [], components: [] });
 
   const stock = Products.stockCount(productId);
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
+  const user = Users.ensure(interaction.guildId, interaction.user.id, interaction.user.username);
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -155,6 +157,7 @@ async function openQtyModal(interaction, productId) {
 
 // 실제 구매 처리 (버튼 즉시구매 / 수량모달 제출 공용)
 async function processPurchase(interaction, productId, qty) {
+  const gid = interaction.guildId;
   qty = Math.max(1, Math.min(50, parseInt(qty, 10) || 1));
   const product = Products.get(productId);
   if (!product) return safeReply(interaction, '제품을 찾을 수 없습니다.');
@@ -164,7 +167,7 @@ async function processPurchase(interaction, productId, qty) {
     return safeReply(interaction, `재고가 부족합니다. (현재 재고 ${available}개)`);
 
   const total = product.price * qty;
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
+  const user = Users.ensure(gid, interaction.user.id, interaction.user.username);
   if (user.balance < total)
     return safeReply(
       interaction,
@@ -186,7 +189,7 @@ async function processPurchase(interaction, productId, qty) {
   const realTotal = product.price * realQty;
 
   try {
-    Users.adjustBalance(interaction.user.id, -realTotal, 'purchase', `${product.name} x${realQty} 구매`);
+    Users.adjustBalance(gid, interaction.user.id, -realTotal, 'purchase', `${product.name} x${realQty} 구매`);
   } catch (e) {
     return safeReply(interaction, '결제 처리 중 오류가 발생했습니다. (잔액 부족)');
   }
@@ -194,7 +197,7 @@ async function processPurchase(interaction, productId, qty) {
   const contents = [];
   let firstPurchaseId = null;
   for (const item of items) {
-    const pid = Purchases.create({
+    const pid = Purchases.create(gid, {
       discord_id: interaction.user.id,
       product_id: product.id,
       product_name: product.name,
@@ -206,7 +209,7 @@ async function processPurchase(interaction, productId, qty) {
     contents.push(item.content);
   }
 
-  const newBalance = Users.get(interaction.user.id).balance;
+  const newBalance = Users.get(gid, interaction.user.id).balance;
 
   // 로블록스 트레이드 배송 상품이면 별도 배송 플로우로 분기
   if (product.delivery_type === 'roblox_trade') {

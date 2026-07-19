@@ -48,9 +48,6 @@ function createApp() {
       }
       const token = await auth.exchangeCode(code);
       const user = await auth.fetchUser(token.access_token);
-      if (!config.isAdmin(user.id)) {
-        return res.redirect('/login?error=' + encodeURIComponent('관리자 권한이 없는 계정입니다.'));
-      }
       req.session.user = {
         id: user.id,
         username: user.global_name || user.username,
@@ -58,6 +55,10 @@ function createApp() {
           ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
           : null,
       };
+      // 소유자 또는 서버 관리자만 접근 가능
+      if (!config.isOwner(user.id) && auth.manageableGuilds(user.id).length === 0) {
+        return res.redirect('/no-access');
+      }
       res.redirect('/');
     } catch (e) {
       console.error('[oauth] 콜백 오류:', e.message);
@@ -67,6 +68,10 @@ function createApp() {
 
   app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/login'));
+  });
+
+  app.get('/no-access', (req, res) => {
+    res.render('no_access', { user: req.session.user });
   });
 
   // ---- 대시보드 ----

@@ -5,6 +5,19 @@
   const d = dash;
 %>
 
+<% if (typeof sub !== 'undefined' && (!sub.active || sub.daysLeft <= 7)) { %>
+  <div class="banner <%= sub.active ? 'green' : 'blue' %>" style="margin-top:20px; <%= sub.active ? '' : 'background:var(--gold-soft);border-color:rgba(245,196,81,.3)' %>">
+    <div class="ico" style="<%= sub.active ? '' : 'background:var(--gold-soft);color:var(--gold)' %>">⏳</div>
+    <div>
+      <b style="color:var(--text)"><%= sub.active ? '구독 만료 임박' : '구독이 만료되었습니다' %></b>
+      <span class="flow">
+        <% if (sub.active) { %><%= sub.plan %> · <b><%= sub.daysLeft %>일</b> 남음. 만료 시 자판기 기능이 잠깁니다.
+        <% } else { %>디스코드에서 <span class="mono">/인증 &lt;키&gt;</span> 로 라이선스를 다시 등록해 주세요.<% } %>
+      </span>
+    </div>
+  </div>
+<% } %>
+
 <!-- Stat cards -->
 <div class="stack" style="margin-top:26px">
   <div class="card stat">

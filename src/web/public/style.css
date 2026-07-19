@@ -120,6 +120,19 @@ button { font-family: inherit; }
   object-fit: cover;
 }
 
+/* ---- Guild switcher bar ------------------------------------------------ */
+.guildbar { background: var(--bg-soft); border-bottom: 1px solid var(--line-soft); }
+.guildbar-inner {
+  max-width: 1180px; margin: 0 auto; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.guildbar .gicon { width: 20px; height: 20px; color: var(--green); flex: 0 0 auto; }
+.guild-select {
+  background: var(--card); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 8px 12px; font-weight: 700; font-size: 14px; max-width: 260px;
+}
+.guild-name { font-weight: 800; font-size: 15px; }
+
 /* ---- Page shell -------------------------------------------------------- */
 .page { max-width: 1180px; margin: 0 auto; padding: 26px 18px 80px; }
 @media (min-width: 780px) { .page { padding: 34px 28px 90px; } }

@@ -21,6 +21,16 @@ const config = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+  // 봇 소유자(슈퍼관리자) - 라이선스 키 발급 권한. 미지정 시 ADMIN_IDS 로 폴백.
+  ownerIds: (process.env.OWNER_IDS || process.env.ADMIN_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  // 요금제 정의 (일수)
+  plans: {
+    '1m': { label: '1개월', days: 30 },
+    '3m': { label: '3개월', days: 90 },
+  },
   web: {
     // Pterodactyl/Docker 계열 호스팅(fps.ms 등)은 포트를 SERVER_PORT 로 주입한다.
     // WEB_PORT 를 직접 지정하지 않아도 자동 할당 포트를 쓰도록 폴백한다.
@@ -36,5 +46,6 @@ const config = {
 };
 
 config.isAdmin = (discordId) => config.adminIds.includes(String(discordId));
+config.isOwner = (discordId) => config.ownerIds.includes(String(discordId));
 
 module.exports = config;

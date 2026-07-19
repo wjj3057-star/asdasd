@@ -4,7 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0f0c" />
-  <title><%= (typeof title !== 'undefined' ? title : '관리자') %> · <%= settings.shop_name %></title>
+  <%
+    const _shopName = (typeof currentGuild !== 'undefined' && currentGuild && currentGuild.name)
+      ? currentGuild.name
+      : ((typeof settings !== 'undefined' && settings) ? settings.shop_name : 'Market');
+  %>
+  <title><%= (typeof title !== 'undefined' ? title : '관리자') %> · <%= _shopName %></title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -41,6 +46,9 @@
     <% nav.forEach(function(n){ %>
       <a href="<%= n.href %>" class="tab <%= active===n.key ? 'active' : '' %>" title="<%= n.key %>"><%- icon(n.icon) %></a>
     <% }) %>
+    <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+      <a href="/owner/licenses" class="tab <%= active==='owner' ? 'active' : '' %>" title="라이선스"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l2 2M14 9l2 2"/></svg></a>
+    <% } %>
     <span class="spacer"></span>
     <% if (typeof user !== 'undefined' && user && user.avatar) { %>
       <a href="/logout"><img class="avatar" src="<%= user.avatar %>" alt="logout" /></a>
@@ -49,6 +57,35 @@
     <% } %>
   </nav>
 </header>
+
+<%
+  const _guilds = (typeof guilds !== 'undefined' && guilds) ? guilds : [];
+  const _cur = (typeof currentGuild !== 'undefined') ? currentGuild : null;
+  const _sub = _cur && _cur.expires_at ? (_cur.expires_at > Date.now()) : false;
+%>
+<% if (_guilds.length) { %>
+<div class="guildbar">
+  <div class="guildbar-inner">
+    <svg class="gicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 12 3 4 7v10l8 4 8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>
+    <% if (_guilds.length > 1) { %>
+    <select class="guild-select" onchange="if(this.value)location.href='/select-guild/'+this.value">
+      <% _guilds.forEach(function(g){ %>
+        <option value="<%= g.guild_id %>" <%= _cur && g.guild_id===_cur.guild_id ? 'selected' : '' %>><%= g.name || g.guild_id %></option>
+      <% }) %>
+    </select>
+    <% } else { %>
+      <span class="guild-name"><%= (_cur && _cur.name) || (_guilds[0] && _guilds[0].name) || '내 서버' %></span>
+    <% } %>
+    <% if (_cur) { %>
+      <% if (_sub) { %>
+        <span class="pill on" style="padding:5px 12px"><span class="dot"></span> 구독중<% if (_cur.expires_at) { %> · <%= Math.max(0, Math.ceil((_cur.expires_at-Date.now())/86400000)) %>일 남음<% } %></span>
+      <% } else { %>
+        <span class="pill warn" style="padding:5px 12px"><span class="dot" style="background:var(--gold)"></span> 구독 만료</span>
+      <% } %>
+    <% } %>
+  </div>
+</div>
+<% } %>
 
 <main class="page">
   <div class="header-row">

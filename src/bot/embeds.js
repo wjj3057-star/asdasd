@@ -16,8 +16,8 @@ function parseColor(hex) {
 }
 
 // 자판기 메인 패널 임베드 + 4버튼 (사진 1 구성)
-function buildPanel() {
-  const s = getAllSettings();
+function buildPanel(guildId) {
+  const s = getAllSettings(guildId);
   const embed = new EmbedBuilder()
     .setColor(parseColor(s.embed_color))
     .setTitle(s.shop_name || 'Market')

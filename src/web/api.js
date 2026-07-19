@@ -68,12 +68,15 @@ router.post('/webhook/coin', checkSecret, (req, res) => {
 const { Deliveries, VipServers } = require('../database/models');
 const deliveryService = require('../roblox/deliveryService');
 
-// 처리 대기열 조회
-router.get('/roblox/queue', checkSecret, (_req, res) => {
-  const items = Deliveries.queue().map((d) => {
+// 처리 대기열 조회 (전 서버 통합 · guild_id 로 구분)
+router.get('/roblox/queue', checkSecret, (req, res) => {
+  let list = Deliveries.queueAll();
+  if (req.query.guild_id) list = list.filter((d) => d.guild_id === req.query.guild_id);
+  const items = list.map((d) => {
     const s = d.vip_server_id ? VipServers.get(d.vip_server_id) : null;
     return {
       id: d.id,
+      guild_id: d.guild_id,
       discord_id: d.discord_id,
       product: d.product_name,
       item: d.roblox_item,

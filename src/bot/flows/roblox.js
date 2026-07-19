@@ -17,11 +17,12 @@ const deliveryService = require('../../roblox/deliveryService');
 
 // 구매 직후 진입 (buy.processPurchase 에서 분기)
 async function handleRobloxPurchase(interaction, { product, qty, total, newBalance, purchaseId }) {
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
+  const gid = interaction.guildId;
+  const user = Users.ensure(gid, interaction.user.id, interaction.user.username);
 
   // 이미 로블록스 닉네임이 등록되어 있으면 바로 대기열 등록
   if (user.roblox_username) {
-    const delivery = createQueuedDelivery(interaction.user.id, product, qty, total, purchaseId, {
+    const delivery = createQueuedDelivery(gid, interaction.user.id, product, qty, total, purchaseId, {
       roblox_username: user.roblox_username,
       roblox_userid: user.roblox_userid,
     });
@@ -31,6 +32,7 @@ async function handleRobloxPurchase(interaction, { product, qty, total, newBalan
 
   // 닉네임 미등록 → 배송 세션 생성 후 DM으로 닉네임 요청
   const delivery = Deliveries.create({
+    guild_id: gid,
     purchase_id: purchaseId,
     discord_id: interaction.user.id,
     product_id: product.id,
@@ -103,13 +105,14 @@ async function submitUsername(interaction, deliveryId) {
     return interaction.editReply({ content: msg });
   }
 
-  // 유저/배송에 로블록스 정보 저장
-  Users.setRoblox(interaction.user.id, resolved.name, resolved.id);
+  // 유저/배송에 로블록스 정보 저장 (배송 레코드의 guild_id 기준 — DM 컨텍스트라 interaction.guildId 없음)
+  const gid = delivery.guild_id;
+  Users.setRoblox(gid, interaction.user.id, resolved.name, resolved.id);
   Deliveries.setUsername(delivery.id, resolved.name, resolved.id);
 
   // 대기열 등록 + 서버 배정
   const product = Products.get(delivery.product_id);
-  const server = VipServers.pickForGame(product ? product.roblox_game : 'Grow a Garden 2');
+  const server = VipServers.pickForGame(gid, product ? product.roblox_game : 'Grow a Garden 2');
   if (server) Deliveries.assignServer(delivery.id, server.id);
   Deliveries.setStatus(delivery.id, 'queued');
 
@@ -125,9 +128,10 @@ async function submitUsername(interaction, deliveryId) {
 
 /* ---------------- 내부 헬퍼 ---------------- */
 
-function createQueuedDelivery(discordId, product, qty, total, purchaseId, roblox) {
-  const server = VipServers.pickForGame(product.roblox_game);
+function createQueuedDelivery(gid, discordId, product, qty, total, purchaseId, roblox) {
+  const server = VipServers.pickForGame(gid, product.roblox_game);
   const delivery = Deliveries.create({
+    guild_id: gid,
     purchase_id: purchaseId,
     discord_id: discordId,
     product_id: product.id,

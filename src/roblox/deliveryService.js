@@ -55,10 +55,11 @@ async function failDelivery(id, reason = '', refund = true) {
   let refunded = false;
   if (refund && d.price > 0) {
     try {
-      Users.adjustBalance(d.discord_id, d.price, 'refund', `로블록스 배송 실패 환불 #${d.id}`);
+      Users.adjustBalance(d.guild_id, d.discord_id, d.price, 'refund', `로블록스 배송 실패 환불 #${d.id}`);
       // 재고 복구 (수량만큼 재입고)
       if (d.product_id && Products.get(d.product_id)) {
         Stock.addBulk(
+          d.guild_id,
           d.product_id,
           Array.from({ length: d.quantity || 1 }, () => `RESTOCK-${d.id}`)
         );

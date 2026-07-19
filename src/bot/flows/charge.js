@@ -16,14 +16,18 @@ const { won, makeUniqueAmount, sanitizeName, parseAmount } = require('../../util
 
 // 충전 방식 선택 (계좌충전 / 코인충전)
 async function startCharge(interaction) {
-  const s = getAllSettings();
+  const gid = interaction.guildId;
+  const coins = Coins.enabled(gid);
+  const coinDesc = coins.length
+    ? `${coins.map((c) => c.symbol).filter((v, i, a) => a.indexOf(v) === i).join(', ')} · 입금 확인 시 자동 반영`
+    : '준비중';
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('🎁 잔액 충전')
     .setDescription('충전 방식을 선택해 주세요.\n모든 충전은 **자동 잔액충전** 시스템으로 처리됩니다.')
     .addFields(
       { name: '🏦 계좌충전', value: '무통장 입금(PG 미사용) · 입금 확인 시 자동 반영', inline: false },
-      { name: '🪙 코인충전', value: `${s.coin_symbol}(${s.coin_network}) · 입금 확인 시 자동 반영`, inline: false }
+      { name: '🪙 코인충전', value: coinDesc, inline: false }
     );
 
   const row = new ActionRowBuilder().addComponents(
@@ -36,11 +40,12 @@ async function startCharge(interaction) {
 
 // 계좌충전: 금액 입력 모달
 async function openAccountModal(interaction) {
-  const s = getAllSettings();
+  const gid = interaction.guildId;
+  const s = getAllSettings(gid);
   if (!s.bank_account) {
     return interaction.reply({ content: '⚠️ 관리자가 아직 입금 계좌를 설정하지 않았습니다.', ephemeral: true });
   }
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
+  const user = Users.ensure(gid, interaction.user.id, interaction.user.username);
 
   const modal = new ModalBuilder().setCustomId(IDS.CHARGE_ACCOUNT_MODAL).setTitle('계좌충전 신청');
   const amount = new TextInputBuilder()
@@ -65,8 +70,9 @@ async function openAccountModal(interaction) {
 }
 
 async function submitAccountCharge(interaction) {
-  const s = getAllSettings();
-  const user = Users.ensure(interaction.user.id, interaction.user.username);
+  const gid = interaction.guildId;
+  const s = getAllSettings(gid);
+  const user = Users.ensure(gid, interaction.user.id, interaction.user.username);
 
   const amount = parseAmount(interaction.fields.getTextInputValue('amount'));
   const min = parseInt(s.charge_min || '1000', 10);
@@ -79,17 +85,17 @@ async function submitAccountCharge(interaction) {
   if (!depositName) {
     const input = sanitizeName(interaction.fields.getTextInputValue('deposit_name'));
     if (!input) return interaction.reply({ content: '입금자명을 입력해 주세요.', ephemeral: true });
-    Users.setDepositName(interaction.user.id, input);
+    Users.setDepositName(gid, interaction.user.id, input);
     depositName = input;
   }
 
   // 동일 입금자명의 대기중 요청 금액과 겹치지 않는 고유 금액 생성
-  const existing = Charges.pendingByUser(interaction.user.id)
+  const existing = Charges.pendingByUser(gid, interaction.user.id)
     .filter((c) => c.method === 'account')
     .map((c) => c.expected_amount);
   const expected = makeUniqueAmount(amount, existing);
 
-  const charge = Charges.create({
+  const charge = Charges.create(gid, {
     discord_id: interaction.user.id,
     method: 'account',
     amount,
@@ -136,7 +142,7 @@ function coinLabel(c) {
 
 // 코인충전 1단계: 코인 종류 선택
 async function openCoinModal(interaction) {
-  const coins = Coins.enabled();
+  const coins = Coins.enabled(interaction.guildId);
   if (!coins.length) {
     return interaction.reply({
       content: '⚠️ 현재 이용 가능한 코인이 없습니다. (관리자가 지갑 주소를 설정해야 합니다.)',
@@ -177,7 +183,7 @@ async function openCoinModal(interaction) {
 
 // 코인충전 2단계: 코인 선택됨 → 금액 입력 모달
 async function onCoinSelected(interaction) {
-  const s = getAllSettings();
+  const s = getAllSettings(interaction.guildId);
   const coinId = parseInt(interaction.values[0], 10);
   const coin = Coins.get(coinId);
   if (!coin || !coin.enabled || !coin.wallet) {
@@ -199,8 +205,9 @@ async function onCoinSelected(interaction) {
 
 // 코인충전 3단계: 금액 제출 → 요청 생성
 async function submitCoinCharge(interaction, coinId) {
-  const s = getAllSettings();
-  Users.ensure(interaction.user.id, interaction.user.username);
+  const gid = interaction.guildId;
+  const s = getAllSettings(gid);
+  Users.ensure(gid, interaction.user.id, interaction.user.username);
 
   const coin = Coins.get(coinId);
   if (!coin || !coin.wallet) {
@@ -217,7 +224,7 @@ async function submitCoinCharge(interaction, coinId) {
   const decimals = Math.min(Math.max(parseInt(coin.decimals, 10) || 6, 4), 8); // 표시용 4~8자리
   const baseCoin = amount / rate;
   // 고유 코인 수량 생성 (마지막 자리 랜덤 꼬리로 동시요청 구분)
-  const existing = Charges.pendingByUser(interaction.user.id)
+  const existing = Charges.pendingByUser(gid, interaction.user.id)
     .filter((c) => c.method === 'coin' && c.coin_symbol === coin.symbol && c.coin_network === coin.network)
     .map((c) => c.coin_amount);
   const tailUnit = Math.pow(10, decimals);
@@ -228,7 +235,7 @@ async function submitCoinCharge(interaction, coinId) {
     if (!existing.includes(coinAmountStr)) break;
   }
 
-  const charge = Charges.create({
+  const charge = Charges.create(gid, {
     discord_id: interaction.user.id,
     method: 'coin',
     amount,

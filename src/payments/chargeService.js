@@ -27,6 +27,7 @@ function approveCharge(chargeId, memo = '') {
     return { ok: false, error: 'ALREADY_RESOLVED', charge };
 
   const after = Users.adjustBalance(
+    charge.guild_id,
     charge.discord_id,
     charge.amount,
     'charge',
@@ -76,6 +77,7 @@ function handleBankNotification(payload) {
     amount != null ? Charges.findPendingAccountMatch(depositor, amount) : null;
 
   BankNotifications.create({
+    guild_id: payload.guild_id || (match ? match.guild_id : ''),
     raw: payload.raw || '',
     depositor,
     amount,

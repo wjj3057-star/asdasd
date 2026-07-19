@@ -1,8 +1,19 @@
 'use strict';
 
 const config = require('../config');
+const { Guilds } = require('../database/models');
 
 const OAUTH_SCOPE = 'identify';
+
+// 로그인 사용자가 관리할 수 있는 길드 목록 (소유자=전체, 그 외=자신이 등록한 서버)
+function manageableGuilds(userId) {
+  if (config.isOwner(userId)) return Guilds.all();
+  return Guilds.forManager(userId);
+}
+function canManage(userId, gid) {
+  if (config.isOwner(userId)) return true;
+  return manageableGuilds(userId).some((g) => g.guild_id === gid);
+}
 
 function loginUrl(state) {
   const params = new URLSearchParams({
@@ -40,13 +51,18 @@ async function fetchUser(accessToken) {
   return res.json();
 }
 
-// 관리자 로그인 필수 미들웨어
+// 로그인 필수 미들웨어 (소유자 또는 최소 1개 서버 관리자)
 function requireAdmin(req, res, next) {
-  if (req.session && req.session.user && config.isAdmin(req.session.user.id)) {
+  const u = req.session && req.session.user;
+  if (u && (config.isOwner(u.id) || manageableGuilds(u.id).length > 0)) {
     return next();
   }
+  if (u) return res.redirect('/no-access');
   if (req.accepts('html')) return res.redirect('/login');
   return res.status(401).json({ error: 'unauthorized' });
 }
 
-module.exports = { loginUrl, exchangeCode, fetchUser, requireAdmin, OAUTH_SCOPE };
+module.exports = {
+  loginUrl, exchangeCode, fetchUser, requireAdmin, OAUTH_SCOPE,
+  manageableGuilds, canManage,
+};

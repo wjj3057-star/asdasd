@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0f0c" />
+  <title>서버 선택</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card" style="max-width:460px">
+      <div class="login-logo">M</div>
+      <span class="eyebrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.8L20 9l-5 3.2L16.5 19 12 15.4 7.5 19 9 12.2 4 9l6.1-1.2z"/></svg> STORE OPERATION</span>
+      <h1 class="page-title" style="font-size:24px; margin:14px 0 6px">관리할 서버 선택</h1>
+      <p class="muted" style="margin:0 0 18px">대시보드에서 관리할 디스코드 서버를 선택하세요.</p>
+
+      <% if (!guilds.length) { %>
+        <div class="alert err" style="text-align:left">
+          아직 관리 가능한 서버가 없습니다.<br/>
+          봇을 서버에 초대하고 디스코드에서 <b>/인증 &lt;키&gt;</b> 로 라이선스를 등록하면 여기에 표시됩니다.
+        </div>
+      <% } else { %>
+        <div class="stack" style="text-align:left">
+          <% guilds.forEach(function(g){ var active = g.expires_at && g.expires_at > Date.now(); %>
+            <a href="/select-guild/<%= g.guild_id %>" class="card" style="display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--text)">
+              <div class="ini" style="width:44px;height:44px;border-radius:12px"><%= String(g.name||'?').slice(0,1) %></div>
+              <div style="flex:1">
+                <div style="font-weight:800"><%= g.name || g.guild_id %></div>
+                <div class="muted" style="font-size:13px"><%= active ? '구독중' : '구독 없음/만료' %></div>
+              </div>
+              <span class="pill <%= active ? 'on' : 'off' %>"><span class="dot"></span> <%= active ? '활성' : '비활성' %></span>
+            </a>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (isOwner) { %>
+        <a class="btn dark block" href="/owner/licenses" style="margin-top:16px">🔑 라이선스 키 관리 (소유자)</a>
+      <% } %>
+      <a class="muted" href="/logout" style="display:inline-block; margin-top:16px; font-size:13px">로그아웃</a>
+    </div>
+  </div>
+</body>
+</html>

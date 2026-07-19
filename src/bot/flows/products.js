@@ -6,7 +6,7 @@ const { won } = require('../../util');
 
 // 제품 버튼: 전체 카테고리/제품/재고 현황 (읽기 전용)
 async function showProducts(interaction) {
-  const cats = Categories.all();
+  const cats = Categories.all(interaction.guildId);
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle('🔎 전체 제품 목록');

@@ -47,7 +47,7 @@ function isTrc20(coin) {
 }
 
 async function pollAll() {
-  const coins = Coins.enabled().filter(isTrc20);
+  const coins = Coins.enabledAll().filter(isTrc20);
   for (const coin of coins) {
     // 순차 폴링 (레이트리밋 회피)
     // eslint-disable-next-line no-await-in-loop
@@ -56,12 +56,13 @@ async function pollAll() {
 }
 
 function start() {
-  const trc20 = Coins.enabled().filter(isTrc20);
-  if (!trc20.length) {
-    console.log('[coin] 자동 폴링 대상(TRC20 지갑) 없음 - 코인 입금은 웹훅/수동 승인으로 처리됩니다.');
-    return;
-  }
-  console.log(`[coin] TRC20 자동확인 폴링 시작 (${trc20.length}개 지갑) · 그 외 네트워크는 웹훅/수동`);
+  const trc20 = Coins.enabledAll().filter(isTrc20);
+  // 지갑이 없어도 폴러는 항상 켠다 (나중에 서버가 지갑을 등록하면 자동 반영)
+  console.log(
+    trc20.length
+      ? `[coin] TRC20 자동확인 폴링 시작 (${trc20.length}개 지갑) · 그 외 네트워크는 웹훅/수동`
+      : '[coin] TRC20 지갑 대기 중 - 등록되면 자동 폴링 (그 외 네트워크는 웹훅/수동)'
+  );
   timer = setInterval(pollAll, 30 * 1000);
   pollAll();
 }
