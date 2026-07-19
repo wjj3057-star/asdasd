@@ -43,6 +43,11 @@ const config = {
     coinWalletAddress: process.env.COIN_WALLET_ADDRESS || '',
     tronGridApiKey: process.env.TRONGRID_API_KEY || '',
   },
+  // 로그인 캡차: 키 미설정 시 자체 SVG 캡차, 설정 시 Cloudflare Turnstile
+  captcha: {
+    turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '',
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
+  },
 };
 
 config.isAdmin = (discordId) => config.adminIds.includes(String(discordId));
