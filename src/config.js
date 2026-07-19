@@ -22,7 +22,9 @@ const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   web: {
-    port: parseInt(process.env.WEB_PORT || '3000', 10),
+    // Pterodactyl/Docker 계열 호스팅(fps.ms 등)은 포트를 SERVER_PORT 로 주입한다.
+    // WEB_PORT 를 직접 지정하지 않아도 자동 할당 포트를 쓰도록 폴백한다.
+    port: parseInt(process.env.WEB_PORT || process.env.SERVER_PORT || '3000', 10),
     baseUrl: (process.env.WEB_BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
     sessionSecret: process.env.SESSION_SECRET || 'insecure-dev-secret',
   },

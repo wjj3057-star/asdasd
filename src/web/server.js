@@ -78,7 +78,8 @@ function createApp() {
 function start(refreshPanelFn) {
   if (refreshPanelFn) setPanelRefresher(refreshPanelFn);
   const app = createApp();
-  app.listen(config.web.port, () => {
+  // 0.0.0.0 바인딩: Pterodactyl/Docker 계열에서 외부 접속이 되려면 필수
+  app.listen(config.web.port, '0.0.0.0', () => {
     console.log(`🌐 웹 대시보드: ${config.web.baseUrl} (포트 ${config.web.port})`);
   });
   return app;
